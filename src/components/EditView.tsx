@@ -1,6 +1,6 @@
 import { type Component, createSignal, onMount } from 'solid-js';
 import { type Card, parseTSV, stringifyTSV } from '../lib/fsrs';
-import { showMainButton, showBackButton } from '../lib/telegram';
+import { showMainButton, showBackButton, isCloudStorageSupported } from '../lib/telegram';
 
 interface EditViewProps {
   cards: Card[];
@@ -56,8 +56,11 @@ const EditView: Component<EditViewProps> = (props) => {
         <div style="margin-bottom: 5px;">
           <strong>Формат:</strong> Вопрос [TAB] Ответ [TAB] метаданные...
         </div>
-        <div>
+        <div style="margin-bottom: 5px;">
           Пустые метаданные = новая карточка
+        </div>
+        <div style="font-size: 12px; color: #999;">
+          💾 Хранение: {isCloudStorageSupported() ? 'Telegram Cloud' : 'Локальное'}
         </div>
       </div>
 

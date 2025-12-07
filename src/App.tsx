@@ -12,6 +12,7 @@ const App: Component = () => {
   const [currentView, setCurrentView] = createSignal<View>('study');
   const [cards, setCards] = createSignal<Card[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [error, setError] = createSignal<string>('');
 
   onMount(async () => {
     initTelegram();
@@ -20,6 +21,7 @@ const App: Component = () => {
 
   const loadCardsFromStorage = async () => {
     try {
+      setError('');
       const tsvData = await loadCards();
       if (tsvData) {
         const loadedCards = parseTSV(tsvData);
@@ -35,6 +37,14 @@ const App: Component = () => {
       }
     } catch (error) {
       console.error('Error loading cards:', error);
+      setError('Ошибка загрузки данных. Используется локальное хранилище.');
+      // Fallback to sample data
+      const sampleCards: Card[] = [
+        { question: 'Hello', answer: 'Привет' },
+        { question: 'World', answer: 'Мир' },
+        { question: 'Cat', answer: 'Кот' }
+      ];
+      setCards(sampleCards);
     }
     setIsLoading(false);
   };
@@ -64,10 +74,15 @@ const App: Component = () => {
 
   if (isLoading()) {
     return (
-      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center;">
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px;">
         <div>
           <div style="font-size: 24px; margin-bottom: 10px;">📚</div>
           <div>Загрузка карточек...</div>
+          {error() && (
+            <div style="color: #ff6b6b; margin-top: 10px; font-size: 14px;">
+              {error()}
+            </div>
+          )}
         </div>
       </div>
     );
