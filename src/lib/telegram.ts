@@ -120,17 +120,31 @@ export class TelegramWebApp {
   }
 
   // Main Button controls
+  private currentMainButtonCallback: (() => void) | null = null;
+
   showMainButton(text: string, callback: () => void) {
     if (!this.tg?.MainButton) return;
+
+    // Remove previous callback if exists
+    if (this.currentMainButtonCallback) {
+      this.tg.MainButton.offClick(this.currentMainButtonCallback);
+    }
 
     this.tg.MainButton.setText(text);
     this.tg.MainButton.show();
     this.tg.MainButton.enable();
     this.tg.MainButton.onClick(callback);
+    this.currentMainButtonCallback = callback;
   }
 
   hideMainButton() {
     if (!this.tg?.MainButton) return;
+    
+    // Remove callback when hiding
+    if (this.currentMainButtonCallback) {
+      this.tg.MainButton.offClick(this.currentMainButtonCallback);
+      this.currentMainButtonCallback = null;
+    }
     
     this.tg.MainButton.hide();
   }
@@ -154,15 +168,29 @@ export class TelegramWebApp {
   }
 
   // Back Button controls
+  private currentBackButtonCallback: (() => void) | null = null;
+
   showBackButton(callback: () => void) {
     if (!this.tg?.BackButton) return;
 
+    // Remove previous callback if exists
+    if (this.currentBackButtonCallback) {
+      this.tg.BackButton.offClick(this.currentBackButtonCallback);
+    }
+
     this.tg.BackButton.show();
     this.tg.BackButton.onClick(callback);
+    this.currentBackButtonCallback = callback;
   }
 
   hideBackButton() {
     if (!this.tg?.BackButton) return;
+    
+    // Remove callback when hiding
+    if (this.currentBackButtonCallback) {
+      this.tg.BackButton.offClick(this.currentBackButtonCallback);
+      this.currentBackButtonCallback = null;
+    }
     
     this.tg.BackButton.hide();
   }

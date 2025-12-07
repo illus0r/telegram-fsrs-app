@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FSRSManager } from '../lib/fsrs';
 import { telegram } from '../lib/telegram';
 
@@ -12,11 +12,63 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
   const [tsvData, setTsvData] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [originalTsv, setOriginalTsv] = useState('');
+  const saveCallbackRef = useRef<() => void>();
+  const cancelCallbackRef = useRef<() => void>();
+
+  const handleSave = useCallback(() => {
+    console.log('EditView: handleSave called', { hasChanges, error, tsvDataLength: tsvData.length });
+    
+    if (!hasChanges || error) {
+      console.log('EditView: Save blocked:', { hasChanges, error });
+      return;
+    }
+    
+    try {
+      console.log('EditView: Calling onSave with TSV data...');
+      onSave(tsvData);
+      telegram.hapticFeedback('notification');
+    } catch (e) {
+      setError('Ошибка сохранения данных');
+      console.error('EditView: Save error:', e);
+    }
+  }, [hasChanges, error, tsvData, onSave]);
+
+  const handleCancel = useCallback(() => {
+    if (hasChanges) {
+      // Show confirmation if there are unsaved changes
+      if (confirm('У вас есть несохранённые изменения. Выйти без сохранения?')) {
+        onCancel();
+      }
+    } else {
+      onCancel();
+    }
+  }, [hasChanges, onCancel]);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    saveCallbackRef.current = handleSave;
+    cancelCallbackRef.current = handleCancel;
+  }, [handleSave, handleCancel]);
 
   useEffect(() => {
     // Load current TSV data
     const currentTsv = fsrs.exportTSV();
+    console.log('EditView: Loading current TSV data:', currentTsv.length, 'characters');
     setTsvData(currentTsv);
+    setOriginalTsv(currentTsv);
+    
+    // Setup buttons
+    const setupButtons = () => {
+      console.log('EditView: Setting up buttons');
+      
+      // Setup save button with ref
+      telegram.showMainButton('Сохранить', () => saveCallbackRef.current?.());
+      telegram.disableMainButton(); // Initially disabled
+      
+      // Setup back button with ref
+      telegram.showBackButton(() => cancelCallbackRef.current?.());
+    };
     
     setupButtons();
     
@@ -24,34 +76,47 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
       telegram.hideMainButton();
       telegram.hideBackButton();
     };
-  }, []);
+  }, [fsrs]);
 
-  const setupButtons = () => {
-    // Setup save button
-    telegram.showMainButton('Сохранить', handleSave);
-    telegram.disableMainButton(); // Initially disabled
-    
-    // Setup back button
-    telegram.showBackButton(handleCancel);
-  };
+  // Update button state when hasChanges or error changes
+  useEffect(() => {
+    if (hasChanges && !error) {
+      console.log('EditView: Enabling save button due to changes');
+      telegram.enableMainButton();
+    } else {
+      console.log('EditView: Disabling save button', { hasChanges, error });
+      telegram.disableMainButton();
+    }
+  }, [hasChanges, error]);
 
   const handleTsvChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = event.target.value;
+    
+    console.log('EditView: TSV change detected', {
+      newLength: newValue.length,
+      originalLength: originalTsv.length,
+      hasChanged: newValue !== originalTsv
+    });
+    
     setTsvData(newValue);
     
-    const hasChanged = newValue !== fsrs.exportTSV();
+    const hasChanged = newValue !== originalTsv;
     setHasChanges(hasChanged);
     setError(null);
     
-    // Enable/disable save button based on changes
-    if (hasChanged) {
-      telegram.enableMainButton();
-    } else {
-      telegram.disableMainButton();
-    }
-    
-    // Validate TSV format
+    // Validate TSV format first
     validateTSV(newValue);
+    
+    // Enable/disable save button based on changes and validation
+    setTimeout(() => {
+      if (hasChanged && !error) {
+        console.log('EditView: Enabling save button after change');
+        telegram.enableMainButton();
+      } else {
+        console.log('EditView: Disabling save button after change', { hasChanged, error });
+        telegram.disableMainButton();
+      }
+    }, 100);
   };
 
   const validateTSV = (data: string) => {
@@ -88,7 +153,7 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
         telegram.disableMainButton();
       } else {
         setError(null);
-        if (hasChanges) {
+        if (hasChanges && !hasError) {
           telegram.enableMainButton();
         }
       }
@@ -98,28 +163,7 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
     }
   };
 
-  const handleSave = () => {
-    if (!hasChanges || error) return;
-    
-    try {
-      onSave(tsvData);
-      telegram.hapticFeedback('notification');
-    } catch (e) {
-      setError('Ошибка сохранения данных');
-      console.error('Save error:', e);
-    }
-  };
 
-  const handleCancel = () => {
-    if (hasChanges) {
-      // Show confirmation if there are unsaved changes
-      if (confirm('У вас есть несохранённые изменения. Выйти без сохранения?')) {
-        onCancel();
-      }
-    } else {
-      onCancel();
-    }
-  };
 
   const insertDemoData = () => {
     if (tsvData.trim() && !confirm('Заменить текущие данные демо-карточками?')) {
@@ -184,11 +228,32 @@ Cat	Кот"
       {/* Actions */}
       <div style={styles.actionsContainer}>
         {!tsvData.trim() && (
+          <div>
+            <button
+              style={styles.demoButton}
+              onClick={insertDemoData}
+            >
+              Добавить демо-карточки
+            </button>
+            {telegram.isAvailable() && (
+              <p style={styles.buttonHint}>
+                Используйте кнопку "Сохранить" вверху экрана после внесения изменений
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Debug save button for testing */}
+        {hasChanges && !error && (
           <button
-            style={styles.demoButton}
-            onClick={insertDemoData}
+            style={{
+              ...styles.demoButton,
+              backgroundColor: '#26de81',
+              marginBottom: '16px',
+            }}
+            onClick={handleSave}
           >
-            Добавить демо-карточки
+            💾 Сохранить (отладка)
           </button>
         )}
         
@@ -322,5 +387,13 @@ const styles = {
     lineHeight: '1.4',
     whiteSpace: 'pre-wrap' as const,
     overflowX: 'auto' as const,
+  },
+  
+  buttonHint: {
+    fontSize: '12px',
+    color: 'var(--tg-theme-hint-color, #8e8e93)',
+    textAlign: 'center' as const,
+    marginTop: '8px',
+    fontStyle: 'italic',
   },
 };
