@@ -86,8 +86,6 @@ const App: Component = () => {
     }
     
     setDebugInfo(debug);
-    debug.push(`🎯 Вызываем setIsLoading(false)`);
-    setDebugInfo([...debug]);
     setIsLoading(false);
     console.log('setIsLoading(false) called, cards count:', cards().length);
   };
@@ -122,7 +120,8 @@ const App: Component = () => {
 
   console.log('App render - isLoading:', isLoading(), 'cards:', cards().length, 'currentView:', currentView());
   
-  if (isLoading()) {
+  // Force show main interface after cards are loaded
+  if (isLoading() && cards().length === 0) {
     return (
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px;">
         <div>
