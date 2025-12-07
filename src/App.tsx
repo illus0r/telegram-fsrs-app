@@ -40,7 +40,7 @@ const App: Component = () => {
       debug.push('📂 Начинаем загрузку карточек...');
       
       const tsvData = await loadCards();
-      debug.push(`💾 Загружены данные: ${tsvData ? `${tsvData.length} символов` : 'пусто'}`);
+      debug.push(`💾 Загружены данные: ${tsvData ? `${tsvData.length} символов` : 'undefined'}`);
       
       if (tsvData) {
         const loadedCards = parseTSV(tsvData);

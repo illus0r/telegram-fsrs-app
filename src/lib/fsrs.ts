@@ -12,6 +12,9 @@ export interface Card {
 const { newCard, gradeCard: gradeCardFSRS } = createDeck();
 
 export function parseTSV(tsvText: string): Card[] {
+  if (!tsvText || typeof tsvText !== 'string') {
+    return [];
+  }
   const lines = tsvText.trim().split('\n').filter(line => line.trim());
   if (lines.length === 0) return [];
   
