@@ -69,6 +69,7 @@ const App: Component = () => {
         debug.push(`✨ Создано демо карточек: ${sampleCards.length}`);
       }
       debug.push('✅ Загрузка завершена успешно');
+      debug.push(`🔄 isLoading будет установлен в false`);
     } catch (error) {
       console.error('Error loading cards:', error);
       debug.push(`❌ Ошибка загрузки: ${error}`);
@@ -112,6 +113,7 @@ const App: Component = () => {
   };
 
   const switchToDebug = () => {
+    console.log('switchToDebug called, isLoading:', isLoading(), 'currentView:', currentView());
     setCurrentView('debug');
   };
 

@@ -94,7 +94,7 @@ export async function loadFromCloud(key: string): Promise<string> {
   try {
     if (isCloudStorageSupported()) {
       const result = await telegram!.CloudStorage.getItem(key);
-      return result || '';
+      return (typeof result === 'string' ? result : '') || '';
     } else {
       return localStorage.getItem(key) || '';
     }
