@@ -69,7 +69,7 @@ const App: Component = () => {
         debug.push(`✨ Создано демо карточек: ${sampleCards.length}`);
       }
       debug.push('✅ Загрузка завершена успешно');
-      debug.push(`🔄 isLoading будет установлен в false`);
+      debug.push(`🔄 Устанавливаем isLoading в false`);
     } catch (error) {
       console.error('Error loading cards:', error);
       debug.push(`❌ Ошибка загрузки: ${error}`);
@@ -86,7 +86,10 @@ const App: Component = () => {
     }
     
     setDebugInfo(debug);
+    debug.push(`🎯 Вызываем setIsLoading(false)`);
+    setDebugInfo([...debug]);
     setIsLoading(false);
+    console.log('setIsLoading(false) called, cards count:', cards().length);
   };
 
   const handleCardsUpdated = async (newCards: Card[]) => {
@@ -117,6 +120,8 @@ const App: Component = () => {
     setCurrentView('debug');
   };
 
+  console.log('App render - isLoading:', isLoading(), 'cards:', cards().length, 'currentView:', currentView());
+  
   if (isLoading()) {
     return (
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px;">
