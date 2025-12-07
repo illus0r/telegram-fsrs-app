@@ -40,12 +40,23 @@ const App: Component = () => {
       debug.push('📂 Начинаем загрузку карточек...');
       
       const tsvData = await loadCards();
-      debug.push(`💾 Загружены данные: ${tsvData ? `${tsvData.length} символов` : 'undefined'}`);
+      debug.push(`💾 Загружены данные: ${tsvData && typeof tsvData === 'string' ? `${tsvData.length} символов` : `тип: ${typeof tsvData}, значение: ${tsvData}`}`);
       
-      if (tsvData) {
+      if (tsvData && typeof tsvData === 'string' && tsvData.trim()) {
         const loadedCards = parseTSV(tsvData);
         debug.push(`🃏 Распарсено карточек: ${loadedCards.length}`);
-        setCards(loadedCards);
+        if (loadedCards.length > 0) {
+          setCards(loadedCards);
+        } else {
+          debug.push('📝 Данные пусты, создаём демо карточки...');
+          const sampleCards: Card[] = [
+            { question: 'Hello', answer: 'Привет' },
+            { question: 'World', answer: 'Мир' },
+            { question: 'Cat', answer: 'Кот' }
+          ];
+          setCards(sampleCards);
+          debug.push(`✨ Создано демо карточек: ${sampleCards.length}`);
+        }
       } else {
         debug.push('📝 Создаём демо карточки...');
         // Initialize with sample data

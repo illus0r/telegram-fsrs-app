@@ -15,7 +15,7 @@ export function parseTSV(tsvText: string): Card[] {
   if (!tsvText || typeof tsvText !== 'string') {
     return [];
   }
-  const lines = tsvText.trim().split('\n').filter(line => line.trim());
+  const lines = tsvText.trim().split('\n').filter(line => line && typeof line === 'string' && line.trim());
   if (lines.length === 0) return [];
   
   // Skip header line if present
