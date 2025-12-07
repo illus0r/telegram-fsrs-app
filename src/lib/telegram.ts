@@ -59,6 +59,15 @@ declare global {
         expand(): void;
         close(): void;
         sendData(data: string): void;
+        setHeaderColor(color: string): void;
+        setBackgroundColor(color: string): void;
+        SettingsButton: {
+          isVisible: boolean;
+          show(): void;
+          hide(): void;
+          onClick(callback: () => void): void;
+          offClick(callback: () => void): void;
+        };
       };
     };
   }
@@ -165,6 +174,34 @@ export class TelegramWebApp {
     if (!this.tg?.MainButton) return;
     
     this.tg.MainButton.disable();
+  }
+
+  // Settings Button controls (less prominent than MainButton)
+  private currentSettingsButtonCallback: (() => void) | null = null;
+
+  showSettingsButton(callback: () => void) {
+    if (!this.tg?.SettingsButton) return;
+
+    // Remove previous callback if exists
+    if (this.currentSettingsButtonCallback) {
+      this.tg.SettingsButton.offClick(this.currentSettingsButtonCallback);
+    }
+
+    this.tg.SettingsButton.show();
+    this.tg.SettingsButton.onClick(callback);
+    this.currentSettingsButtonCallback = callback;
+  }
+
+  hideSettingsButton() {
+    if (!this.tg?.SettingsButton) return;
+    
+    // Remove callback when hiding
+    if (this.currentSettingsButtonCallback) {
+      this.tg.SettingsButton.offClick(this.currentSettingsButtonCallback);
+      this.currentSettingsButtonCallback = null;
+    }
+    
+    this.tg.SettingsButton.hide();
   }
 
   // Back Button controls

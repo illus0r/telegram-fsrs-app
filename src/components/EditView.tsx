@@ -243,19 +243,7 @@ Cat	Кот"
           </div>
         )}
 
-        {/* Debug save button for testing */}
-        {hasChanges && !error && (
-          <button
-            style={{
-              ...styles.demoButton,
-              backgroundColor: '#26de81',
-              marginBottom: '16px',
-            }}
-            onClick={handleSave}
-          >
-            💾 Сохранить (отладка)
-          </button>
-        )}
+
         
         <details style={styles.helpDetails}>
           <summary style={styles.helpSummary}>Справка по формату</summary>

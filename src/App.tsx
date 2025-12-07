@@ -78,6 +78,17 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSaveProgress = async () => {
+    try {
+      const tsvData = fsrs.exportTSV();
+      await storage.setItem(STORAGE_KEY, tsvData);
+      console.log('Progress saved automatically');
+    } catch (err) {
+      console.error('Failed to save progress:', err);
+      // Don't show error to user for auto-save failures
+    }
+  };
+
   const handleCancel = () => {
     // Reload cards from storage to discard changes
     initializeApp();
@@ -117,6 +128,7 @@ export const App: React.FC = () => {
         <StudyView
           fsrs={fsrs}
           onEdit={handleEdit}
+          onSaveProgress={handleSaveProgress}
         />
       ) : (
         <EditView

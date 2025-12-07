@@ -6,9 +6,10 @@ import { telegram } from '../lib/telegram';
 interface StudyViewProps {
   fsrs: FSRSManager;
   onEdit: () => void;
+  onSaveProgress: () => Promise<void>;
 }
 
-export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit }) => {
+export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgress }) => {
   const [currentCard, setCurrentCard] = useState<CardData | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [stats, setStats] = useState(fsrs.getStats());
@@ -16,10 +17,10 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit }) => {
   useEffect(() => {
     loadNextCard();
     updateStats();
-    setupMainButton();
+    setupSettingsButton();
     
     return () => {
-      telegram.hideMainButton();
+      telegram.hideSettingsButton();
     };
   }, []);
 
@@ -33,8 +34,8 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit }) => {
     setStats(fsrs.getStats());
   };
 
-  const setupMainButton = () => {
-    telegram.showMainButton('Редактировать', onEdit);
+  const setupSettingsButton = () => {
+    telegram.showSettingsButton(onEdit);
   };
 
   const handleCardClick = () => {
@@ -43,10 +44,18 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit }) => {
     }
   };
 
-  const handleGrade = (grade: Rating) => {
+  const handleGrade = async (grade: Rating) => {
     if (!currentCard || !showAnswer) return;
 
     fsrs.reviewCard(currentCard, grade);
+    
+    // Save progress to storage
+    try {
+      await onSaveProgress();
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+    }
+    
     loadNextCard();
     updateStats();
     
@@ -54,14 +63,75 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit }) => {
     telegram.hapticFeedback('impact');
   };
 
-  const getGradeText = (grade: Rating): string => {
-    switch (grade) {
-      case 1: return 'Снова';
-      case 2: return 'Трудно';
-      case 3: return 'Хорошо';
-      case 4: return 'Легко';
-      default: return 'Хорошо';
+  const getSchedulingInfo = () => {
+    if (!currentCard) return null;
+    
+    try {
+      const schedulingInfo = fsrs.getSchedulingInfo(currentCard);
+      return schedulingInfo;
+    } catch (error) {
+      console.log('Could not get scheduling info:', error);
+      return null;
     }
+  };
+
+  const formatInterval = (days: number): string => {
+    if (days < 1) {
+      const minutes = Math.round(days * 24 * 60);
+      if (minutes < 60) return `${minutes}м`;
+      const hours = Math.round(minutes / 60);
+      return `${hours}ч`;
+    } else if (days < 30) {
+      return `${Math.round(days)}д`;
+    } else if (days < 365) {
+      const months = Math.round(days / 30);
+      return `${months}мес`;
+    } else {
+      const years = Math.round(days / 365);
+      return `${years}г`;
+    }
+  };
+
+  const getGradeText = (grade: Rating): string => {
+    const schedulingInfo = getSchedulingInfo();
+    
+    let baseText: string;
+    let interval: string = '';
+    
+    switch (grade) {
+      case 1: 
+        baseText = 'Снова';
+        if (schedulingInfo?.again) {
+          const days = schedulingInfo.again.card.scheduled_days;
+          interval = `\n${formatInterval(days)}`;
+        }
+        break;
+      case 2: 
+        baseText = 'Трудно';
+        if (schedulingInfo?.hard) {
+          const days = schedulingInfo.hard.card.scheduled_days;
+          interval = `\n${formatInterval(days)}`;
+        }
+        break;
+      case 3: 
+        baseText = 'Хорошо';
+        if (schedulingInfo?.good) {
+          const days = schedulingInfo.good.card.scheduled_days;
+          interval = `\n${formatInterval(days)}`;
+        }
+        break;
+      case 4: 
+        baseText = 'Легко';
+        if (schedulingInfo?.easy) {
+          const days = schedulingInfo.easy.card.scheduled_days;
+          interval = `\n${formatInterval(days)}`;
+        }
+        break;
+      default: 
+        baseText = 'Хорошо';
+    }
+    
+    return baseText + interval;
   };
 
   const getGradeColor = (grade: Rating): string => {
@@ -314,20 +384,27 @@ const styles = {
   
   gradeButtons: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
+    gridTemplateColumns: '1fr 1fr 1fr 1fr',
+    gap: '8px',
   },
   
   gradeButton: {
-    padding: '12px 16px',
+    padding: '8px 4px',
     border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
+    borderRadius: '6px',
+    fontSize: '11px',
     fontWeight: '600',
     color: '#ffffff',
     cursor: 'pointer',
     transition: 'opacity 0.2s ease',
     outline: 'none',
+    textAlign: 'center' as const,
+    whiteSpace: 'pre-line' as const,
+    lineHeight: '1.2',
+    minHeight: '44px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
   emptyState: {

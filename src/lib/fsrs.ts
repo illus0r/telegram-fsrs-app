@@ -34,11 +34,12 @@ export class FSRSManager {
   // TSV parsing and serialization
   parseTSV(tsvData: string): CardData[] {
     const lines = tsvData.trim().split('\n');
-    if (lines.length === 0) return [];
+    if (lines.length <= 1) return []; // Need at least header + 1 data line
 
     const cards: CardData[] = [];
 
-    for (let i = 0; i < lines.length; i++) {
+    // Skip first line (header)
+    for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
@@ -89,7 +90,10 @@ export class FSRSManager {
   }
 
   serializeTSV(cards: CardData[]): string {
-    if (cards.length === 0) return '';
+    // Always include header
+    const header = 'question\tanswer\tdue\tstability\tdifficulty\telapsed_days\tscheduled_days\treps\tlapses\tstate\tlast_review';
+    
+    if (cards.length === 0) return header;
 
     const lines = cards.map(({ question, answer, card }) => {
       return [
@@ -107,7 +111,7 @@ export class FSRSManager {
       ].join('\t');
     });
 
-    return lines.join('\n');
+    return [header, ...lines].join('\n');
   }
 
   // Load cards from TSV data
@@ -135,6 +139,23 @@ export class FSRSManager {
     // Sort by due date (earliest first)
     dueCards.sort((a, b) => a.card.due.getTime() - b.card.due.getTime());
     return dueCards[0];
+  }
+
+  // Get scheduling info for a card (for showing next review times)
+  getSchedulingInfo(cardData: CardData) {
+    const now = new Date();
+    try {
+      const schedulingInfo = this.fsrs.repeat(cardData.card, now);
+      return {
+        again: schedulingInfo[1],
+        hard: schedulingInfo[2], 
+        good: schedulingInfo[3],
+        easy: schedulingInfo[4],
+      };
+    } catch (error) {
+      console.error('Error getting scheduling info:', error);
+      return null;
+    }
   }
 
   // Review a card
