@@ -3,97 +3,82 @@ import StudyView from './components/StudyView';
 import EditView from './components/EditView';
 import { type Card, parseTSV, stringifyTSV } from './lib/fsrs';
 import { saveCards, loadCards } from './lib/storage';
-import { initTelegram, hideMainButton, hideBackButton, getTelegramVersion, getTelegramDebugInfo } from './lib/telegram';
+import { initTelegram, hideMainButton, hideBackButton } from './lib/telegram';
 import './App.css';
 
-type View = 'study' | 'edit' | 'debug';
+type View = 'loading' | 'study' | 'edit';
 
 const App: Component = () => {
-  const [currentView, setCurrentView] = createSignal<View>('study');
+  const [currentView, setCurrentView] = createSignal<View>('loading');
   const [cards, setCards] = createSignal<Card[]>([]);
-  const [isLoading, setIsLoading] = createSignal(true);
   const [error, setError] = createSignal<string>('');
-  const [debugInfo, setDebugInfo] = createSignal<string[]>([]);
 
   onMount(async () => {
-    const debug: string[] = [];
-    debug.push('🚀 Приложение запускается...');
-    
     try {
+      // Initialize Telegram
       initTelegram();
-      debug.push('✅ Telegram WebApp инициализирован');
-      debug.push(`📱 Версия: ${getTelegramVersion()}`);
-      debug.push(`🔧 Детали: ${getTelegramDebugInfo()}`);
+      
+      // Load cards
+      await loadCardsFromStorage();
+      
+      // Switch to main view after short delay to ensure loading screen is visible
+      setTimeout(() => {
+        setCurrentView('study');
+      }, 1000);
+      
     } catch (e) {
-      debug.push(`❌ Ошибка инициализации Telegram: ${e}`);
+      console.error('Initialization error:', e);
+      setError('Ошибка инициализации');
+      // Still switch to study view even if there's an error
+      setTimeout(() => {
+        setCurrentView('study');
+      }, 2000);
     }
-    
-    setDebugInfo([...debug]);
-    await loadCardsFromStorage();
   });
 
   const loadCardsFromStorage = async () => {
-    const debug = [...debugInfo()];
-    
     try {
-      setError('');
-      debug.push('📂 Начинаем загрузку карточек...');
-      
       const tsvData = await loadCards();
-      debug.push(`💾 Загружены данные: ${tsvData && typeof tsvData === 'string' ? `${tsvData.length} символов` : `тип: ${typeof tsvData}, значение: ${tsvData}`}`);
       
       if (tsvData && typeof tsvData === 'string' && tsvData.trim()) {
         const loadedCards = parseTSV(tsvData);
-        debug.push(`🃏 Распарсено карточек: ${loadedCards.length}`);
         if (loadedCards.length > 0) {
           setCards(loadedCards);
-        } else {
-          debug.push('📝 Данные пусты, создаём демо карточки...');
-          const sampleCards: Card[] = [
-            { question: 'Hello', answer: 'Привет' },
-            { question: 'World', answer: 'Мир' },
-            { question: 'Cat', answer: 'Кот' }
-          ];
-          setCards(sampleCards);
-          debug.push(`✨ Создано демо карточек: ${sampleCards.length}`);
+          return;
         }
-      } else {
-        debug.push('📝 Создаём демо карточки...');
-        // Initialize with sample data
-        const sampleCards: Card[] = [
-          { question: 'Hello', answer: 'Привет' },
-          { question: 'World', answer: 'Мир' },
-          { question: 'Cat', answer: 'Кот' }
-        ];
-        setCards(sampleCards);
-        debug.push(`✨ Создано демо карточек: ${sampleCards.length}`);
       }
-      debug.push('✅ Загрузка завершена успешно');
-      debug.push(`🔄 Устанавливаем isLoading в false`);
-    } catch (error) {
-      console.error('Error loading cards:', error);
-      debug.push(`❌ Ошибка загрузки: ${error}`);
-      setError('Ошибка загрузки данных. Используется локальное хранилище.');
       
-      // Fallback to sample data
+      // Create demo cards if no data
       const sampleCards: Card[] = [
         { question: 'Hello', answer: 'Привет' },
         { question: 'World', answer: 'Мир' },
         { question: 'Cat', answer: 'Кот' }
       ];
       setCards(sampleCards);
-      debug.push(`🔄 Fallback: создано карточек: ${sampleCards.length}`);
+      
+    } catch (error) {
+      console.error('Error loading cards:', error);
+      setError('Ошибка загрузки данных');
+      
+      // Fallback to demo cards
+      const sampleCards: Card[] = [
+        { question: 'Hello', answer: 'Привет' },
+        { question: 'World', answer: 'Мир' },
+        { question: 'Cat', answer: 'Кот' }
+      ];
+      setCards(sampleCards);
     }
-    
-    setDebugInfo(debug);
-    setIsLoading(false);
-    console.log('setIsLoading(false) called, cards count:', cards().length);
   };
 
   const handleCardsUpdated = async (newCards: Card[]) => {
     setCards(newCards);
-    const tsvData = stringifyTSV(newCards);
-    await saveCards(tsvData);
+    try {
+      const tsvData = stringifyTSV(newCards);
+      await saveCards(tsvData);
+    } catch (error) {
+      console.error('Error saving cards:', error);
+      setError('Ошибка сохранения данных');
+    }
   };
 
   const handleCardUpdated = async (updatedCard: Card, index: number) => {
@@ -113,43 +98,32 @@ const App: Component = () => {
     setCurrentView('study');
   };
 
-  const switchToDebug = () => {
-    console.log('switchToDebug called, isLoading:', isLoading(), 'currentView:', currentView());
-    setCurrentView('debug');
-  };
-
-  console.log('App render - isLoading:', isLoading(), 'cards:', cards().length, 'currentView:', currentView());
-  
-  // Show loading screen only if truly loading and no cards yet
-  if (isLoading()) {
+  // Loading screen
+  if (currentView() === 'loading') {
     return (
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px;">
-        <div>
-          <div style="font-size: 24px; margin-bottom: 10px;">📚</div>
-          <div style="margin-bottom: 15px;">Загрузка карточек...</div>
-          
-          {/* Debug info */}
-          <div style="background: #f5f5f5; border-radius: 8px; padding: 10px; margin: 10px 0; max-width: 300px; font-size: 12px; text-align: left;">
-            <div style="font-weight: bold; margin-bottom: 5px;">Отладочная информация:</div>
-            {debugInfo().map(info => (
-              <div style="margin: 2px 0; color: #666;">{info}</div>
-            ))}
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; background: #f5f5f5;">
+        <div style="font-size: 48px; margin-bottom: 20px;">📚</div>
+        <div style="font-size: 18px; margin-bottom: 10px;">Загрузка карточек...</div>
+        <div style="font-size: 14px; color: #666;">Подготавливаем ваши карточки для изучения</div>
+        
+        {error() && (
+          <div style="color: #ff6b6b; margin-top: 20px; font-size: 14px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ffcdd2; max-width: 300px;">
+            {error()}
           </div>
-          
-          {error() && (
-            <div style="color: #ff6b6b; margin-top: 10px; font-size: 14px; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #ffcdd2;">
-              {error()}
-            </div>
-          )}
-          
-          <button onClick={switchToDebug} style="margin-top: 10px; padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; font-size: 12px;">
-            Показать детали
-          </button>
-        </div>
+        )}
+        
+        {/* Force switch to study after 5 seconds if stuck */}
+        <button 
+          onClick={() => setCurrentView('study')} 
+          style="margin-top: 30px; padding: 12px 24px; background: #007AFF; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;"
+        >
+          Продолжить без ожидания
+        </button>
       </div>
     );
   }
 
+  // Main app
   return (
     <div style="min-height: 100vh; background: #f5f5f5;">
       {currentView() === 'study' ? (
@@ -157,44 +131,13 @@ const App: Component = () => {
           cards={cards()}
           onCardUpdated={handleCardUpdated}
           onSwitchToEdit={switchToEdit}
-          onSwitchToDebug={switchToDebug}
         />
-      ) : currentView() === 'edit' ? (
+      ) : (
         <EditView
           cards={cards()}
           onCardsUpdated={handleCardsUpdated}
           onSwitchToStudy={switchToStudy}
         />
-      ) : (
-        <div style="padding: 20px; font-family: monospace; font-size: 12px;">
-          <h2 style="margin-bottom: 20px; font-size: 18px;">🔍 Отладочная информация</h2>
-          
-          <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #ddd;">
-            <h3 style="margin-bottom: 10px;">Логи загрузки:</h3>
-            {debugInfo().map(info => (
-              <div style="margin: 3px 0; padding: 2px 0; border-bottom: 1px solid #f0f0f0;">{info}</div>
-            ))}
-          </div>
-          
-          <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #ddd;">
-            <h3 style="margin-bottom: 10px;">Состояние приложения:</h3>
-            <div>📊 Карточек загружено: {cards().length}</div>
-            <div>🔄 Текущий режим: {currentView()}</div>
-            <div>❗ Ошибки: {error() || 'нет'}</div>
-          </div>
-          
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onClick={switchToStudy} style="padding: 10px 20px; background: #007AFF; color: white; border: none; border-radius: 6px;">
-              К изучению
-            </button>
-            <button onClick={switchToEdit} style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 6px;">
-              К редактированию
-            </button>
-            <button onClick={() => loadCardsFromStorage()} style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px;">
-              Перезагрузить
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

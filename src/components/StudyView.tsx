@@ -6,7 +6,6 @@ interface StudyViewProps {
   cards: Card[];
   onCardUpdated: (updatedCard: Card, index: number) => void;
   onSwitchToEdit: () => void;
-  onSwitchToDebug?: () => void;
 }
 
 const StudyView: Component<StudyViewProps> = (props) => {
