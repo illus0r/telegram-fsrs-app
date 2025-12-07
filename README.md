@@ -51,20 +51,25 @@ Cat	Кот
 ## Установка и запуск
 
 ### Требования
-- Node.js 20+ (для Vite)
+- Node.js 16+ (протестировано на 16.11.1)
 - npm или yarn
 
 ### Разработка
 
 ```bash
 npm install
+# Для локальной разработки нужен Node.js 20+
+# Или используйте GitHub Codespaces/Docker
 npm run dev
 ```
 
 ### Сборка для GitHub Pages
 
 ```bash
+# Сборка работает на Node.js 16+ (используется Vite 4)
 npm run build
+
+# Деплой в GitHub Pages
 npm run deploy
 ```
 
@@ -105,14 +110,21 @@ npm run deploy
 2. Настройте GitHub Pages в настройках репозитория
 3. Выберите источник: GitHub Actions
 4. Запушьте код и запустите `npm run deploy`
-5. Ваше приложение будет доступно по адресу: `https://username.github.io/repo-name/`
+5. Ваше приложение будет доступно по адресу: `https://fsrs.dianov.org/`
 
 ### Настройка для Telegram Bot
 
 1. Создайте бота через @BotFather
 2. Настройте Mini App командой: `/setminiapp`
-3. Укажите URL вашего GitHub Pages
+3. Укажите URL: `https://fsrs.dianov.org/`
 4. Готово! Пользователи могут запускать приложение из Telegram
+
+### Кастомный домен
+
+Приложение настроено для работы на домене `fsrs.dianov.org`:
+- CNAME файл автоматически включается в сборку
+- DNS должен указывать на GitHub Pages IP
+- SSL сертификат настраивается автоматически через GitHub Pages
 
 ## Лицензия
 
