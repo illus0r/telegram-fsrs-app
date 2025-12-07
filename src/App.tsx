@@ -120,8 +120,8 @@ const App: Component = () => {
 
   console.log('App render - isLoading:', isLoading(), 'cards:', cards().length, 'currentView:', currentView());
   
-  // Force show main interface after cards are loaded
-  if (isLoading() && cards().length === 0) {
+  // Show loading screen only if truly loading and no cards yet
+  if (isLoading()) {
     return (
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px;">
         <div>
@@ -157,6 +157,7 @@ const App: Component = () => {
           cards={cards()}
           onCardUpdated={handleCardUpdated}
           onSwitchToEdit={switchToEdit}
+          onSwitchToDebug={switchToDebug}
         />
       ) : currentView() === 'edit' ? (
         <EditView
@@ -182,12 +183,15 @@ const App: Component = () => {
             <div>❗ Ошибки: {error() || 'нет'}</div>
           </div>
           
-          <div style="display: flex; gap: 10px;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <button onClick={switchToStudy} style="padding: 10px 20px; background: #007AFF; color: white; border: none; border-radius: 6px;">
               К изучению
             </button>
             <button onClick={switchToEdit} style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 6px;">
               К редактированию
+            </button>
+            <button onClick={() => loadCardsFromStorage()} style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px;">
+              Перезагрузить
             </button>
           </div>
         </div>

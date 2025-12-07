@@ -66,14 +66,9 @@ const StudyView: Component<StudyViewProps> = (props) => {
       <div style="padding: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
         <h2>🎉 Нет карточек для повторения!</h2>
         <p>Все карточки изучены. Возвращайтесь позже или добавьте новые.</p>
-        {props.onSwitchToDebug && (
-          <button 
-            onClick={props.onSwitchToDebug}
-            style="margin-top: 15px; padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; font-size: 12px;"
-          >
-            🔍 Показать отладку
-          </button>
-        )}
+        <p style="color: #666; font-size: 14px; margin-top: 10px;">
+          Всего карточек: {props.cards.length}
+        </p>
       </div>
     );
   }
@@ -83,16 +78,8 @@ const StudyView: Component<StudyViewProps> = (props) => {
 
   return (
     <div style="padding: 20px; display: flex; flex-direction: column; height: 100vh;">
-      <div style="margin-bottom: 10px; text-align: center; color: #666; display: flex; justify-content: space-between; align-items: center;">
+      <div style="margin-bottom: 10px; text-align: center; color: #666;">
         <span>{currentIndex() + 1} / {reviewCards().length}</span>
-        {props.onSwitchToDebug && (
-          <button 
-            onClick={props.onSwitchToDebug}
-            style="padding: 4px 8px; background: #f0f0f0; color: #666; border: none; border-radius: 4px; font-size: 10px;"
-          >
-            🔍
-          </button>
-        )}
       </div>
 
       <div 
