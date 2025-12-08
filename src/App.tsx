@@ -64,6 +64,13 @@ export const App: React.FC = () => {
     setCurrentView('cardEdit');
   };
 
+  const handleCreateCard = () => {
+    // Create a new empty card
+    const newCard = fsrs.addCard('Новый вопрос', 'Новый ответ');
+    setCurrentEditCard(newCard);
+    setCurrentView('cardEdit');
+  };
+
   const handleSave = async (tsvData: string) => {
     try {
       console.log('Saving TSV data...');
@@ -108,13 +115,9 @@ export const App: React.FC = () => {
     try {
       console.log('Saving card edit...');
       
-      // Update the card in FSRS manager
-      const cardIndex = fsrs.getAllCards().findIndex(c => c === currentEditCard);
-      if (cardIndex !== -1) {
-        // Update question and answer while preserving FSRS data
-        currentEditCard.question = question;
-        currentEditCard.answer = answer;
-      }
+      // Update question and answer while preserving FSRS data
+      currentEditCard.question = question;
+      currentEditCard.answer = answer;
       
       // Save to storage
       await handleSaveProgress();
@@ -134,6 +137,33 @@ export const App: React.FC = () => {
   const handleCardEditCancel = () => {
     setCurrentView('study');
     setCurrentEditCard(null);
+  };
+
+  const handleCardDelete = async () => {
+    if (!currentEditCard) return;
+    
+    if (!confirm('Вы уверены, что хотите удалить эту карточку?')) {
+      return;
+    }
+    
+    try {
+      console.log('Deleting card...');
+      
+      // Remove the card from FSRS manager
+      fsrs.removeCard(currentEditCard);
+      
+      // Save to storage
+      await handleSaveProgress();
+      
+      console.log('Card deleted successfully');
+      setCurrentView('study');
+      setCurrentEditCard(null);
+      setError(null);
+      
+    } catch (err) {
+      console.error('Failed to delete card:', err);
+      setError('Ошибка удаления карточки');
+    }
   };
 
   if (isLoading) {
@@ -170,6 +200,7 @@ export const App: React.FC = () => {
           fsrs={fsrs}
           onEditCard={handleCardEdit}
           onEditTSV={handleEdit}
+          onCreateCard={handleCreateCard}
           onSaveProgress={handleSaveProgress}
         />
       ) : currentView === 'edit' ? (
@@ -183,6 +214,7 @@ export const App: React.FC = () => {
           card={currentEditCard}
           onSave={handleCardSave}
           onCancel={handleCardEditCancel}
+          onDelete={handleCardDelete}
         />
       ) : null}
     </div>

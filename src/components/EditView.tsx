@@ -126,7 +126,9 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
     }
 
     try {
-      const lines = data.trim().split('\n');
+      // Replace == with tabs before validation
+      const processedData = data.replace(/==/g, '\t');
+      const lines = processedData.trim().split('\n');
       let hasError = false;
       let errorMessage = '';
 
@@ -135,19 +137,18 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
         if (!line) continue;
 
         const columns = line.split('\t');
-        if (columns.length < 2) {
+        if (columns.length < 1) {
           hasError = true;
-          errorMessage = `Строка ${i + 1}: минимум 2 колонки (вопрос и ответ)`;
+          errorMessage = `Строка ${i + 1}: нужен как минимум вопрос`;
           break;
         }
 
-        // Validate that question and answer are not empty after unescaping
+        // Validate that question is not empty after unescaping
         const question = (columns[0] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').trim();
-        const answer = (columns[1] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').trim();
         
-        if (!question || !answer) {
+        if (!question) {
           hasError = true;
-          errorMessage = `Строка ${i + 1}: вопрос и ответ не могут быть пустыми`;
+          errorMessage = `Строка ${i + 1}: вопрос не может быть пустым`;
           break;
         }
       }
@@ -189,13 +190,15 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
   const formatHelp = `Формат TSV:
 question	answer	due	stability	difficulty	elapsed_days	scheduled_days	reps	lapses	state	last_review
 
-Для новых карточек достаточно указать только вопрос и ответ:
-Hello	Привет
-World	Мир
+Для новых карточек достаточно указать только вопрос:
+Hello==Привет
+World==Мир
+Incomplete question (без ответа)
 
+Используйте == вместо табуляции между столбцами.
 Для многострочных записей используйте \\n:
-What is TypeScript?	TypeScript is a programming\\nlanguage that builds on JavaScript\\nby adding static type definitions.
-How to cook pasta?	1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve`;
+What is TypeScript?==TypeScript is a programming\\nlanguage that builds on JavaScript\\nby adding static type definitions.
+How to cook pasta?==1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve`;
 
   return (
     <div style={styles.container}>
@@ -225,10 +228,11 @@ How to cook pasta?	1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. 
           style={styles.textarea}
           value={tsvData}
           onChange={handleTsvChange}
-          placeholder="question	answer	[метаданные FSRS...]
-Hello	Привет
-World	Мир
-Cat	Кот"
+          placeholder="question==answer==[метаданные FSRS...]
+Hello==Привет
+World==Мир
+Cat==Кот
+Incomplete question"
           spellCheck={false}
         />
       </div>

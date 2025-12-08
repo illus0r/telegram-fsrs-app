@@ -33,7 +33,9 @@ export class FSRSManager {
 
   // TSV parsing and serialization
   parseTSV(tsvData: string): CardData[] {
-    const lines = tsvData.trim().split('\n');
+    // Replace == with tabs before parsing
+    const processedData = tsvData.replace(/==/g, '\t');
+    const lines = processedData.trim().split('\n');
     if (lines.length <= 1) return []; // Need at least header + 1 data line
 
     const cards: CardData[] = [];
@@ -44,11 +46,11 @@ export class FSRSManager {
       if (!line) continue;
 
       const columns = line.split('\t');
-      if (columns.length < 2) continue;
+      if (columns.length < 1) continue; // Need at least question
 
       // Unescape newlines and tabs in question and answer
       const question = (columns[0] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-      const answer = (columns[1] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+      const answer = columns.length > 1 ? (columns[1] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t') : '';
 
       // Parse FSRS fields (if available)
       const due = columns[2] ? new Date(columns[2]) : new Date();
@@ -103,7 +105,7 @@ export class FSRSManager {
       
       return [
         escapedQuestion,
-        escapedAnswer,
+        escapedAnswer || '', // Allow empty answers
         card.due.toISOString(),
         card.stability.toString(),
         card.difficulty.toString(),
@@ -276,12 +278,12 @@ export class FSRSManager {
   // Get demo cards
   static getDemoTSV(): string {
     return [
-      'question\tanswer\tdue\tstability\tdifficulty\telapsed_days\tscheduled_days\treps\tlapses\tstate\tlast_review',
-      'Hello\tПривет\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'World\tМир\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'Cat\tКот\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'How to cook pasta?\t1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'What is JavaScript?\tJavaScript is a programming\\nlanguage that runs in\\nweb browsers and servers\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
+      'question==answer==due==stability==difficulty==elapsed_days==scheduled_days==reps==lapses==state==last_review',
+      'Hello==Привет==' + new Date().toISOString() + '==0==0==0==0==0==0==0==',
+      'World==Мир==' + new Date().toISOString() + '==0==0==0==0==0==0==0==',
+      'Cat==Кот==' + new Date().toISOString() + '==0==0==0==0==0==0==0==',
+      'How to cook pasta?==1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve==' + new Date().toISOString() + '==0==0==0==0==0==0==0==',
+      'Incomplete card without answer==' + new Date().toISOString() + '==0==0==0==0==0==0==0==',
     ].join('\n');
   }
 }

@@ -7,10 +7,11 @@ interface StudyViewProps {
   fsrs: FSRSManager;
   onEditCard: (card: CardData) => void;
   onEditTSV: () => void;
+  onCreateCard: () => void;
   onSaveProgress: () => Promise<void>;
 }
 
-export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onSaveProgress }) => {
+export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onCreateCard, onSaveProgress }) => {
   const [currentCard, setCurrentCard] = useState<CardData | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [stats, setStats] = useState(fsrs.getStats());
@@ -18,11 +19,6 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
   useEffect(() => {
     loadNextCard();
     updateStats();
-    setupSettingsButton();
-    
-    return () => {
-      telegram.hideSettingsButton();
-    };
   }, []);
 
   const loadNextCard = () => {
@@ -35,9 +31,7 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
     setStats(fsrs.getStats());
   };
 
-  const setupSettingsButton = () => {
-    telegram.showSettingsButton(onEditTSV);
-  };
+
 
 
   const handleCardClick = () => {
@@ -163,11 +157,8 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
   if (!currentCard) {
     return (
       <div style={styles.container}>
-        <div style={styles.completedState}>
-          <h2 style={styles.completedTitle}>🎉 Все готово!</h2>
-          <p style={styles.completedText}>
-            Вы повторили все карточки на сегодня. Отличная работа!
-          </p>
+        {/* Stats header */}
+        <div style={styles.statsHeader}>
           <div style={styles.statsContainer}>
             <div style={styles.statItem}>
               <span style={styles.statValue}>{stats.total}</span>
@@ -182,6 +173,33 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
               <span style={styles.statLabel}>Новые</span>
             </div>
           </div>
+          <div style={styles.buttonGroup}>
+            <button
+              style={styles.createButton}
+              onClick={onCreateCard}
+              title="Создать новую карточку"
+            >
+              +
+            </button>
+            <button
+              style={styles.tableButton}
+              onClick={onEditTSV}
+              title="Массовое редактирование"
+            >
+              <div style={styles.tableIcon}>
+                <div style={styles.tableIconRow}></div>
+                <div style={styles.tableIconRow}></div>
+                <div style={styles.tableIconRow}></div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.completedState}>
+          <h2 style={styles.completedTitle}>🎉 Все готово!</h2>
+          <p style={styles.completedText}>
+            Вы повторили все карточки на сегодня. Отличная работа!
+          </p>
         </div>
       </div>
     );
@@ -204,6 +222,26 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
             <span style={styles.statValue}>{stats.review}</span>
             <span style={styles.statLabel}>Повторение</span>
           </div>
+        </div>
+        <div style={styles.buttonGroup}>
+          <button
+            style={styles.createButton}
+            onClick={onCreateCard}
+            title="Создать новую карточку"
+          >
+            +
+          </button>
+          <button
+            style={styles.tableButton}
+            onClick={onEditTSV}
+            title="Массовое редактирование"
+          >
+            <div style={styles.tableIcon}>
+              <div style={styles.tableIconRow}></div>
+              <div style={styles.tableIconRow}></div>
+              <div style={styles.tableIconRow}></div>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -287,6 +325,9 @@ const styles = {
     padding: '16px',
     backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
     borderBottom: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   
   statsContainer: {
@@ -436,13 +477,13 @@ const styles = {
   },
   
   completedState: {
-    flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
     justifyContent: 'center',
     padding: '32px 16px',
     textAlign: 'center' as const,
+    minHeight: '300px',
   },
   
   completedTitle: {
@@ -476,5 +517,59 @@ const styles = {
     cursor: 'pointer',
     textDecoration: 'underline',
     outline: 'none',
+  },
+  
+  buttonGroup: {
+    display: 'flex',
+    gap: '8px',
+  },
+  
+  createButton: {
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'var(--tg-theme-button-color, #2481cc)',
+    color: 'var(--tg-theme-button-text-color, #ffffff)',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '18px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    outline: 'none',
+    transition: 'opacity 0.2s ease',
+  },
+  
+  tableButton: {
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    color: 'var(--tg-theme-hint-color, #8e8e93)',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '16px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    outline: 'none',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
+  },
+  
+  tableIcon: {
+    width: '16px',
+    height: '12px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '2px',
+  },
+  
+  tableIconRow: {
+    width: '100%',
+    height: '2px',
+    backgroundColor: 'currentColor',
+    borderRadius: '1px',
   },
 };

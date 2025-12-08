@@ -6,9 +6,10 @@ interface CardEditViewProps {
   card: CardData;
   onSave: (question: string, answer: string) => void;
   onCancel: () => void;
+  onDelete: () => void;
 }
 
-export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCancel }) => {
+export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCancel, onDelete }) => {
   const [question, setQuestion] = useState(card.question);
   const [answer, setAnswer] = useState(card.answer);
   const [hasChanges, setHasChanges] = useState(false);
@@ -24,9 +25,9 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
       return;
     }
     
-    // Validate input
-    if (!question.trim() || !answer.trim()) {
-      setError('Вопрос и ответ не могут быть пустыми');
+    // Validate input - only question is required
+    if (!question.trim()) {
+      setError('Вопрос не может быть пустым');
       return;
     }
     
@@ -162,6 +163,16 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
         </div>
       </div>
 
+      {/* Actions */}
+      <div style={styles.actionsContainer}>
+        <button
+          style={styles.deleteButton}
+          onClick={onDelete}
+        >
+          🗑️ Удалить карточку
+        </button>
+      </div>
+
       {/* Hints */}
       <div style={styles.hintsContainer}>
         <p style={styles.hint}>
@@ -169,6 +180,9 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
         </p>
         <p style={styles.hint}>
           📊 Прогресс изучения сохранится после редактирования
+        </p>
+        <p style={styles.hint}>
+          ℹ️ Ответ может быть пустым (фронтальная карта)
         </p>
         {telegram.isAvailable() && (
           <p style={styles.hint}>
@@ -271,5 +285,28 @@ const styles = {
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     margin: '4px 0',
     lineHeight: '1.3',
+  },
+  
+  actionsContainer: {
+    padding: '16px',
+    borderTop: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  
+  deleteButton: {
+    padding: '10px 20px',
+    backgroundColor: '#ff4757',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    outline: 'none',
+    transition: 'opacity 0.2s ease',
   },
 };
