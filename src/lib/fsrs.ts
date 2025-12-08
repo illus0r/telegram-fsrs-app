@@ -146,11 +146,38 @@ export class FSRSManager {
     const now = new Date();
     try {
       const schedulingInfo = this.fsrs.repeat(cardData.card, now);
+      
+      // ts-fsrs 3.5 returns an object with keys as numbers
+      // Convert due dates to Date objects
       return {
-        again: schedulingInfo[1],
-        hard: schedulingInfo[2], 
-        good: schedulingInfo[3],
-        easy: schedulingInfo[4],
+        again: {
+          ...schedulingInfo[1],
+          card: {
+            ...schedulingInfo[1].card,
+            due: new Date(schedulingInfo[1].card.due)
+          }
+        },
+        hard: {
+          ...schedulingInfo[2],
+          card: {
+            ...schedulingInfo[2].card,
+            due: new Date(schedulingInfo[2].card.due)
+          }
+        },
+        good: {
+          ...schedulingInfo[3],
+          card: {
+            ...schedulingInfo[3].card,
+            due: new Date(schedulingInfo[3].card.due)
+          }
+        },
+        easy: {
+          ...schedulingInfo[4],
+          card: {
+            ...schedulingInfo[4].card,
+            due: new Date(schedulingInfo[4].card.due)
+          }
+        },
       };
     } catch (error) {
       console.error('Error getting scheduling info:', error);

@@ -70,68 +70,63 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgre
       const schedulingInfo = fsrs.getSchedulingInfo(currentCard);
       return schedulingInfo;
     } catch (error) {
-      console.log('Could not get scheduling info:', error);
       return null;
     }
   };
 
-  const formatInterval = (days: number): string => {
-    if (days < 1) {
-      const minutes = Math.round(days * 24 * 60);
-      if (minutes < 60) return `${minutes}м`;
-      const hours = Math.round(minutes / 60);
-      return `${hours}ч`;
-    } else if (days < 30) {
-      return `${Math.round(days)}д`;
-    } else if (days < 365) {
-      const months = Math.round(days / 30);
-      return `${months}мес`;
+  const formatInterval = (dueDate: Date): string => {
+    const now = new Date();
+    const diffMs = dueDate.getTime() - now.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+    const diffHours = diffMinutes / 60;
+    const diffDays = diffHours / 24;
+    
+    if (diffMinutes < 1) {
+      return '1 мин';
+    } else if (diffMinutes < 60) {
+      return `${Math.round(diffMinutes)} мин`;
+    } else if (diffHours < 24) {
+      return `${Math.round(diffHours)} ч`;
+    } else if (diffDays < 30) {
+      return `${Math.round(diffDays)} д`;
+    } else if (diffDays < 365) {
+      const months = Math.round(diffDays / 30);
+      return `${months} мес`;
     } else {
-      const years = Math.round(days / 365);
-      return `${years}г`;
+      const years = Math.round(diffDays / 365);
+      return `${years} г`;
     }
   };
 
   const getGradeText = (grade: Rating): string => {
     const schedulingInfo = getSchedulingInfo();
     
-    let baseText: string;
-    let interval: string = '';
+    if (!schedulingInfo) return '?';
     
     switch (grade) {
       case 1: 
-        baseText = 'Снова';
         if (schedulingInfo?.again) {
-          const days = schedulingInfo.again.card.scheduled_days;
-          interval = `\n${formatInterval(days)}`;
+          return formatInterval(schedulingInfo.again.card.due);
         }
         break;
       case 2: 
-        baseText = 'Трудно';
         if (schedulingInfo?.hard) {
-          const days = schedulingInfo.hard.card.scheduled_days;
-          interval = `\n${formatInterval(days)}`;
+          return formatInterval(schedulingInfo.hard.card.due);
         }
         break;
       case 3: 
-        baseText = 'Хорошо';
         if (schedulingInfo?.good) {
-          const days = schedulingInfo.good.card.scheduled_days;
-          interval = `\n${formatInterval(days)}`;
+          return formatInterval(schedulingInfo.good.card.due);
         }
         break;
       case 4: 
-        baseText = 'Легко';
         if (schedulingInfo?.easy) {
-          const days = schedulingInfo.easy.card.scheduled_days;
-          interval = `\n${formatInterval(days)}`;
+          return formatInterval(schedulingInfo.easy.card.due);
         }
         break;
-      default: 
-        baseText = 'Хорошо';
     }
     
-    return baseText + interval;
+    return '?';
   };
 
   const getGradeColor = (grade: Rating): string => {
@@ -399,7 +394,7 @@ const styles = {
     transition: 'opacity 0.2s ease',
     outline: 'none',
     textAlign: 'center' as const,
-    whiteSpace: 'pre-line' as const,
+    whiteSpace: 'nowrap' as const,
     lineHeight: '1.2',
     minHeight: '44px',
     display: 'flex',
