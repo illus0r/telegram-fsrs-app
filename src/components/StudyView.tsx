@@ -5,11 +5,12 @@ import { telegram } from '../lib/telegram';
 
 interface StudyViewProps {
   fsrs: FSRSManager;
-  onEdit: () => void;
+  onEditCard: (card: CardData) => void;
+  onEditTSV: () => void;
   onSaveProgress: () => Promise<void>;
 }
 
-export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgress }) => {
+export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onSaveProgress }) => {
   const [currentCard, setCurrentCard] = useState<CardData | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [stats, setStats] = useState(fsrs.getStats());
@@ -35,8 +36,9 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgre
   };
 
   const setupSettingsButton = () => {
-    telegram.showSettingsButton(onEdit);
+    telegram.showSettingsButton(onEditTSV);
   };
+
 
   const handleCardClick = () => {
     if (!showAnswer) {
@@ -238,7 +240,6 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgre
       {/* Grade buttons */}
       {showAnswer && (
         <div style={styles.gradeContainer}>
-          <h3 style={styles.gradeTitle}>Насколько хорошо вы помните?</h3>
           <div style={styles.gradeButtons}>
             {[1, 2, 3, 4].map((grade) => (
               <button
@@ -253,6 +254,18 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEdit, onSaveProgre
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Edit button under card */}
+      {currentCard && (
+        <div style={styles.editContainer}>
+          <button
+            style={styles.editButton}
+            onClick={() => onEditCard(currentCard)}
+          >
+            Редактировать
+          </button>
         </div>
       )}
     </div>
@@ -334,6 +347,7 @@ const styles = {
     margin: '0',
     color: 'var(--tg-theme-text-color, #000000)',
     lineHeight: '1.4',
+    whiteSpace: 'pre-line' as const,
   },
   
   divider: {
@@ -351,6 +365,7 @@ const styles = {
     margin: '0',
     color: 'var(--tg-theme-text-color, #000000)',
     lineHeight: '1.4',
+    whiteSpace: 'pre-line' as const,
   },
   
   tapHint: {
@@ -369,13 +384,7 @@ const styles = {
     backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
   },
   
-  gradeTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    margin: '0 0 16px 0',
-    textAlign: 'center' as const,
-    color: 'var(--tg-theme-text-color, #000000)',
-  },
+
   
   gradeButtons: {
     display: 'grid',
@@ -448,5 +457,24 @@ const styles = {
     margin: '0 0 32px 0',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     lineHeight: '1.4',
+  },
+  
+  editContainer: {
+    padding: '16px',
+    textAlign: 'center' as const,
+    backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
+  },
+  
+  editButton: {
+    padding: '8px 16px',
+    backgroundColor: 'transparent',
+    color: 'var(--tg-theme-link-color, #2481cc)',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    outline: 'none',
   },
 };

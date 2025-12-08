@@ -130,7 +130,7 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
       let hasError = false;
       let errorMessage = '';
 
-      for (let i = 0; i < lines.length; i++) {
+      for (let i = 1; i < lines.length; i++) { // Skip header line
         const line = lines[i].trim();
         if (!line) continue;
 
@@ -141,7 +141,11 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
           break;
         }
 
-        if (!columns[0].trim() || !columns[1].trim()) {
+        // Validate that question and answer are not empty after unescaping
+        const question = (columns[0] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').trim();
+        const answer = (columns[1] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').trim();
+        
+        if (!question || !answer) {
           hasError = true;
           errorMessage = `Строка ${i + 1}: вопрос и ответ не могут быть пустыми`;
           break;
@@ -187,7 +191,11 @@ question	answer	due	stability	difficulty	elapsed_days	scheduled_days	reps	lapses
 
 Для новых карточек достаточно указать только вопрос и ответ:
 Hello	Привет
-World	Мир`;
+World	Мир
+
+Для многострочных записей используйте \\n:
+What is TypeScript?	TypeScript is a programming\\nlanguage that builds on JavaScript\\nby adding static type definitions.
+How to cook pasta?	1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve`;
 
   return (
     <div style={styles.container}>

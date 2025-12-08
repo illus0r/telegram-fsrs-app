@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { StudyView } from './components/StudyView';
 import { EditView } from './components/EditView';
-import { FSRSManager } from './lib/fsrs';
+import { CardEditView } from './components/CardEditView';
+import { FSRSManager, CardData } from './lib/fsrs';
 import { storage } from './lib/storage';
 import { telegram } from './lib/telegram';
 
-type View = 'study' | 'edit';
+type View = 'study' | 'edit' | 'cardEdit';
 
 const STORAGE_KEY = 'cards';
 
 export const App: React.FC = () => {
   const [fsrs] = useState(() => new FSRSManager());
   const [currentView, setCurrentView] = useState<View>('study');
+  const [currentEditCard, setCurrentEditCard] = useState<CardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +59,11 @@ export const App: React.FC = () => {
     setCurrentView('edit');
   };
 
+  const handleCardEdit = (card: CardData) => {
+    setCurrentEditCard(card);
+    setCurrentView('cardEdit');
+  };
+
   const handleSave = async (tsvData: string) => {
     try {
       console.log('Saving TSV data...');
@@ -95,6 +102,40 @@ export const App: React.FC = () => {
     setCurrentView('study');
   };
 
+  const handleCardSave = async (question: string, answer: string) => {
+    if (!currentEditCard) return;
+    
+    try {
+      console.log('Saving card edit...');
+      
+      // Update the card in FSRS manager
+      const cardIndex = fsrs.getAllCards().findIndex(c => c === currentEditCard);
+      if (cardIndex !== -1) {
+        // Update question and answer while preserving FSRS data
+        currentEditCard.question = question;
+        currentEditCard.answer = answer;
+      }
+      
+      // Save to storage
+      await handleSaveProgress();
+      
+      console.log('Card saved successfully');
+      setCurrentView('study');
+      setCurrentEditCard(null);
+      setError(null);
+      
+    } catch (err) {
+      console.error('Failed to save card:', err);
+      setError('Ошибка сохранения карточки');
+      throw err;
+    }
+  };
+
+  const handleCardEditCancel = () => {
+    setCurrentView('study');
+    setCurrentEditCard(null);
+  };
+
   if (isLoading) {
     return (
       <div style={styles.loadingContainer}>
@@ -127,16 +168,23 @@ export const App: React.FC = () => {
       {currentView === 'study' ? (
         <StudyView
           fsrs={fsrs}
-          onEdit={handleEdit}
+          onEditCard={handleCardEdit}
+          onEditTSV={handleEdit}
           onSaveProgress={handleSaveProgress}
         />
-      ) : (
+      ) : currentView === 'edit' ? (
         <EditView
           fsrs={fsrs}
           onSave={handleSave}
           onCancel={handleCancel}
         />
-      )}
+      ) : currentView === 'cardEdit' && currentEditCard ? (
+        <CardEditView
+          card={currentEditCard}
+          onSave={handleCardSave}
+          onCancel={handleCardEditCancel}
+        />
+      ) : null}
     </div>
   );
 };

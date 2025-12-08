@@ -46,8 +46,9 @@ export class FSRSManager {
       const columns = line.split('\t');
       if (columns.length < 2) continue;
 
-      const question = columns[0] || '';
-      const answer = columns[1] || '';
+      // Unescape newlines and tabs in question and answer
+      const question = (columns[0] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+      const answer = (columns[1] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
 
       // Parse FSRS fields (if available)
       const due = columns[2] ? new Date(columns[2]) : new Date();
@@ -96,9 +97,13 @@ export class FSRSManager {
     if (cards.length === 0) return header;
 
     const lines = cards.map(({ question, answer, card }) => {
+      // Escape newlines and tabs in question and answer for TSV format
+      const escapedQuestion = question.replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+      const escapedAnswer = answer.replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+      
       return [
-        question,
-        answer,
+        escapedQuestion,
+        escapedAnswer,
         card.due.toISOString(),
         card.stability.toString(),
         card.difficulty.toString(),
@@ -275,8 +280,8 @@ export class FSRSManager {
       'Hello\tПривет\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
       'World\tМир\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
       'Cat\tКот\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'Dog\tСобака\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
-      'Book\tКнига\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
+      'How to cook pasta?\t1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4. Drain and serve\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
+      'What is JavaScript?\tJavaScript is a programming\\nlanguage that runs in\\nweb browsers and servers\t' + new Date().toISOString() + '\t0\t0\t0\t0\t0\t0\t0\t',
     ].join('\n');
   }
 }
