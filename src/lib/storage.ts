@@ -359,6 +359,15 @@ async function syncToCloudBackground(key: string, value: string): Promise<void> 
 
     console.log(`[ChunkedStorage] Data too large (${value.length} > ${MAX_CHUNK_SIZE}), splitting into chunks...`);
 
+    // Remove old regular item to avoid conflicts
+    try {
+      console.log(`[ChunkedStorage] Removing old regular item: ${key}`);
+      await storage.removeItem(key);
+      console.log(`[ChunkedStorage] Old regular item removed successfully`);
+    } catch (error) {
+      console.log(`[ChunkedStorage] Old regular item removal failed (may not exist):`, error);
+    }
+
     // Split into chunks
     const chunks: string[] = [];
     for (let i = 0; i < value.length; i += MAX_CHUNK_SIZE) {
@@ -435,65 +444,44 @@ export async function getChunkedItem(key: string): Promise<string | null> {
   console.log(`[ChunkedStorage] Starting getChunkedItem for key: ${key}`);
   
   try {
-    // 1. Check localStorage first for most recent data
+    // 1. Check if we have unsaved local changes that are newer than cloud
+    const hasUnsavedChanges = syncStatus.getStatus().hasUnsavedChanges;
+    console.log(`[ChunkedStorage] Has unsaved changes: ${hasUnsavedChanges}`);
+    
+    // 2. If we have unsaved changes, use local data
+    if (hasUnsavedChanges) {
+      const localValue = localStorage.getItem(`${key}_local`);
+      if (localValue !== null) {
+        console.log(`[ChunkedStorage] ✅ Using local data (has unsaved changes), size: ${localValue.length} chars`);
+        return localValue;
+      }
+    }
+    
+    // 3. Try to get data from cloud first (most authoritative)
+    console.log(`[ChunkedStorage] No unsaved changes, checking cloud data first...`);
+    
+    const cloudData = await getChunkedItemFromCloud(key);
+    if (cloudData !== null) {
+      console.log(`[ChunkedStorage] ✅ Found cloud data, size: ${cloudData.length} chars (authoritative)`);
+      
+      // Update local cache with cloud data
+      localStorage.setItem(`${key}_local`, cloudData);
+      localStorage.setItem(`${key}_local_timestamp`, new Date().toISOString());
+      console.log(`[ChunkedStorage] Updated local cache with cloud data`);
+      
+      return cloudData;
+    }
+    
+    // 4. Fallback to local data if cloud is unavailable
     const localValue = localStorage.getItem(`${key}_local`);
     if (localValue !== null) {
-      console.log(`[ChunkedStorage] ✅ Found local data, size: ${localValue.length} chars (most recent)`);
+      console.log(`[ChunkedStorage] ✅ Using local data (cloud unavailable), size: ${localValue.length} chars`);
       return localValue;
     }
 
-    // 2. Try to get regular item from CloudStorage
-    console.log(`[ChunkedStorage] No local data, trying CloudStorage regular item...`);
-    const regularValue = await storage.getItem(key);
-    if (regularValue !== null) {
-      console.log(`[ChunkedStorage] Found regular item in CloudStorage, size: ${regularValue.length} chars`);
-      return regularValue;
-    }
-
-    console.log(`[ChunkedStorage] Regular item not found, trying chunked data...`);
-
-    // 3. Try to get chunked data from CloudStorage
-    const metaValue = await storage.getItem(`${key}_meta`);
-    if (!metaValue) {
-      console.log(`[ChunkedStorage] No metadata found, returning null`);
-      return null;
-    }
-
-    console.log(`[ChunkedStorage] Found metadata:`, metaValue);
-
-    let meta;
-    try {
-      meta = JSON.parse(metaValue);
-    } catch {
-      console.error(`[ChunkedStorage] Failed to parse metadata JSON`);
-      throw new Error('Invalid meta data format');
-    }
-
-    if (!meta.cardsBatches || typeof meta.cardsBatches !== 'number') {
-      console.error(`[ChunkedStorage] Invalid metadata structure:`, meta);
-      throw new Error('Invalid meta data structure');
-    }
-
-    console.log(`[ChunkedStorage] Metadata parsed, expecting ${meta.cardsBatches} chunks`);
-
-    // Load all chunks
-    const chunks: string[] = [];
-    for (let i = 0; i < meta.cardsBatches; i++) {
-      console.log(`[ChunkedStorage] Loading chunk ${i}/${meta.cardsBatches - 1}...`);
-      
-      const chunkContent = await storage.getItem(`${key}_cardsBatch${i}`);
-      if (!chunkContent) {
-        console.error(`[ChunkedStorage] Missing chunk ${i} of ${meta.cardsBatches}`);
-        throw new Error(`Missing chunk ${i} of ${meta.cardsBatches}`);
-      }
-
-      console.log(`[ChunkedStorage] Chunk ${i} loaded, content size: ${chunkContent.length} chars`);
-      chunks.push(chunkContent);
-    }
-
-    const result = chunks.join('');
-    console.log(`[ChunkedStorage] All chunks loaded and joined, total size: ${result.length} chars`);
-    return result;
+    // 5. No data found anywhere
+    console.log(`[ChunkedStorage] No data found in cloud or local storage`);
+    return null;
 
   } catch (error) {
     console.error(`[ChunkedStorage] Failed to load chunked item ${key}:`, error);
@@ -625,5 +613,158 @@ export function getLocalStorageInfo(key: string): {hasLocal: boolean, timestamp:
   } catch (error) {
     console.error(`[ChunkedStorage] Failed to get localStorage info:`, error);
     return {hasLocal: false, timestamp: null, size: 0};
+  }
+}
+
+// Function to get chunked data directly from CloudStorage (bypassing localStorage)
+export async function getChunkedItemFromCloud(key: string): Promise<string | null> {
+  console.log(`[ChunkedStorage] Starting getChunkedItemFromCloud for key: ${key} (bypassing localStorage)`);
+  
+  try {
+    // 1. Try to get regular item from CloudStorage first
+    console.log(`[ChunkedStorage] Step 1: Trying CloudStorage regular item...`);
+    const regularValue = await storage.getItem(key);
+    console.log(`[ChunkedStorage] Regular item result:`, regularValue ? `Found (${regularValue.length} chars)` : 'Not found');
+    
+    if (regularValue !== null) {
+      console.log(`[ChunkedStorage] ✅ Found regular item in CloudStorage, size: ${regularValue.length} chars`);
+      return regularValue;
+    }
+
+    console.log(`[ChunkedStorage] Step 2: Regular item not found, trying chunked data...`);
+
+    // 2. Try to get chunked data from CloudStorage
+    console.log(`[ChunkedStorage] Looking for metadata key: ${key}_meta`);
+    const metaValue = await storage.getItem(`${key}_meta`);
+    console.log(`[ChunkedStorage] Metadata result:`, metaValue ? `Found: ${metaValue}` : 'Not found');
+    
+    if (!metaValue) {
+      console.log(`[ChunkedStorage] ❌ No metadata found in CloudStorage for key: ${key}_meta`);
+      return null;
+    }
+
+    console.log(`[ChunkedStorage] ✅ Found metadata in CloudStorage:`, metaValue);
+
+    let meta;
+    try {
+      meta = JSON.parse(metaValue);
+    } catch (parseError) {
+      console.error(`[ChunkedStorage] Failed to parse metadata JSON:`, parseError);
+      return null;
+    }
+
+    console.log(`[ChunkedStorage] Parsed metadata:`, meta);
+
+    if (!meta.cardsBatches || typeof meta.cardsBatches !== 'number') {
+      console.error(`[ChunkedStorage] Invalid metadata structure:`, meta);
+      return null;
+    }
+
+    console.log(`[ChunkedStorage] ✅ Metadata parsed successfully, expecting ${meta.cardsBatches} chunks`);
+
+    // Load all chunks from CloudStorage
+    const chunks: string[] = [];
+    for (let i = 0; i < meta.cardsBatches; i++) {
+      const chunkKey = `${key}_cardsBatch${i}`;
+      console.log(`[ChunkedStorage] Step 2.${i+1}: Loading chunk ${i}/${meta.cardsBatches - 1} with key: ${chunkKey}...`);
+      
+      const chunkContent = await storage.getItem(chunkKey);
+      console.log(`[ChunkedStorage] Chunk ${i} result:`, chunkContent ? `Found (${chunkContent.length} chars)` : 'Missing!');
+      
+      if (!chunkContent) {
+        console.error(`[ChunkedStorage] ❌ Missing chunk ${i} of ${meta.cardsBatches} in CloudStorage (key: ${chunkKey})`);
+        return null;
+      }
+
+      console.log(`[ChunkedStorage] ✅ Chunk ${i} loaded from CloudStorage, content size: ${chunkContent.length} chars`);
+      chunks.push(chunkContent);
+    }
+
+    const result = chunks.join('');
+    console.log(`[ChunkedStorage] ✅ All ${chunks.length} chunks loaded from CloudStorage and joined`);
+    console.log(`[ChunkedStorage] Final result size: ${result.length} chars`);
+    return result;
+
+  } catch (error) {
+    console.error(`[ChunkedStorage] ❌ Failed to load chunked item ${key} from CloudStorage:`, error);
+    return null;
+  }
+}
+
+// Function to manually cleanup old regular items that conflict with chunked storage
+export async function cleanupOldRegularItem(key: string): Promise<void> {
+  console.log(`[ChunkedStorage] Starting cleanup of old regular item: ${key}`);
+  
+  try {
+    // Check if chunked data exists
+    const metaValue = await storage.getItem(`${key}_meta`);
+    if (!metaValue) {
+      console.log(`[ChunkedStorage] No chunked metadata found, no cleanup needed`);
+      return;
+    }
+
+    console.log(`[ChunkedStorage] Chunked metadata found, checking for conflicting regular item...`);
+    
+    // Check if regular item exists
+    const regularValue = await storage.getItem(key);
+    if (!regularValue) {
+      console.log(`[ChunkedStorage] No regular item found, no cleanup needed`);
+      return;
+    }
+
+    console.log(`[ChunkedStorage] Found conflicting regular item (${regularValue.length} chars), removing...`);
+    
+    // Remove the old regular item
+    await storage.removeItem(key);
+    console.log(`[ChunkedStorage] Old regular item removed successfully`);
+    
+  } catch (error) {
+    console.error(`[ChunkedStorage] Failed to cleanup old regular item:`, error);
+    throw new Error(`Ошибка очистки старых данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// Function to inspect all CloudStorage keys for debugging
+export async function inspectCloudStorage(): Promise<string> {
+  console.log(`[ChunkedStorage] Starting CloudStorage inspection...`);
+  
+  try {
+    const keysToCheck = [
+      'cards',
+      'cards_meta',
+      'cards_cardsBatch0',
+      'cards_cardsBatch1', 
+      'cards_cardsBatch2',
+      'cards_cardsBatch3',
+      'cards_cardsBatch4',
+      'cards_cardsBatch5'
+    ];
+
+    const results: string[] = [];
+    results.push('=== CloudStorage Inspection ===\n');
+
+    for (const key of keysToCheck) {
+      console.log(`[ChunkedStorage] Checking key: ${key}`);
+      try {
+        const value = await storage.getItem(key);
+        if (value) {
+          results.push(`✅ ${key}: Found (${value.length} chars)`);
+          results.push(`   Preview: ${value.substring(0, 100)}...`);
+        } else {
+          results.push(`❌ ${key}: Not found`);
+        }
+      } catch (error) {
+        results.push(`⚠️  ${key}: Error - ${error}`);
+      }
+    }
+
+    const report = results.join('\n');
+    console.log(`[ChunkedStorage] CloudStorage inspection completed`);
+    return report;
+
+  } catch (error) {
+    const errorMsg = `Ошибка инспекции CloudStorage: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error(`[ChunkedStorage] ${errorMsg}`);
+    return errorMsg;
   }
 }

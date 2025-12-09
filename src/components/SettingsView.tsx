@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { logger } from '../lib/logger';
-import { getLocalStorageInfo, clearLocalStorage, getChunkedItem, setChunkedItem } from '../lib/storage';
+import { getLocalStorageInfo, clearLocalStorage, getChunkedItem, setChunkedItem, cleanupOldRegularItem, inspectCloudStorage, storage } from '../lib/storage';
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -11,6 +11,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [logsText, setLogsText] = useState(logger.getLogsAsText());
   const [storageInfo, setStorageInfo] = useState(getLocalStorageInfo('cards'));
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cloudData, setCloudData] = useState<string>('');
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
 
   useEffect(() => {
     // Auto-scroll to bottom when logs update
@@ -45,10 +47,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         // Clear localStorage first
         clearLocalStorage('cards');
         
-        // Try to load from cloud storage
-        const cloudData = await getChunkedItem('cards');
+        // Force load from cloud storage directly
+        console.log('🔍 Step 1: Starting forced cloud reload...');
+        
+        // Check regular item first
+        console.log('🔍 Step 2: Checking regular item cards...');
+        const regularValue = await storage.getItem('cards');
+        console.log('🔍 Regular item result:', regularValue ? `Found ${regularValue.length} chars` : 'Not found');
+        
+        let cloudData = regularValue;
+        
+        if (!regularValue) {
+          console.log('🔍 Step 3: Checking metadata cards_meta...');
+          const metaValue = await storage.getItem('cards_meta');
+          console.log('🔍 Metadata result:', metaValue || 'Not found');
+          
+          if (metaValue) {
+            const meta = JSON.parse(metaValue);
+            console.log('🔍 Parsed metadata:', meta);
+            
+            if (meta.cardsBatches) {
+              console.log(`🔍 Step 4: Loading ${meta.cardsBatches} chunks...`);
+              const chunks: string[] = [];
+              
+              for (let i = 0; i < meta.cardsBatches; i++) {
+                const chunkKey = `cards_cardsBatch${i}`;
+                console.log(`🔍 Loading chunk ${i}: ${chunkKey}`);
+                const chunkContent = await storage.getItem(chunkKey);
+                console.log(`🔍 Chunk ${i} result:`, chunkContent ? `Found ${chunkContent.length} chars` : 'Missing!');
+                
+                if (chunkContent) {
+                  chunks.push(chunkContent);
+                }
+              }
+              
+              if (chunks.length === meta.cardsBatches) {
+                cloudData = chunks.join('');
+                console.log(`🔍 Step 5: All chunks joined, total: ${cloudData.length} chars`);
+              }
+            }
+          }
+        }
+        
         if (cloudData) {
-          console.log('Reloaded data from cloud storage');
+          // Update localStorage with cloud data
+          localStorage.setItem('cards_local', cloudData);
+          localStorage.setItem('cards_local_timestamp', new Date().toISOString());
+          console.log('Reloaded data from cloud storage and updated localStorage');
         } else {
           console.log('No cloud data found');
         }
@@ -80,6 +125,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     }
   };
 
+  const handleLoadFromCloud = async () => {
+    console.log('🔍 handleLoadFromCloud called!');
+    setIsLoadingCloud(true);
+    setCloudData('Загрузка...');
+    
+    try {
+      console.log('🔍 Step 1: Starting getChunkedItemFromCloud...');
+      
+      // Manual implementation with detailed logging
+      console.log('🔍 Step 2: Checking regular item cards...');
+      const regularValue = await storage.getItem('cards');
+      console.log('🔍 Regular item result:', regularValue ? `Found ${regularValue.length} chars` : 'Not found');
+      
+      if (regularValue) {
+        setCloudData(`✅ Regular item найден (${regularValue.length} символов):\n\n${regularValue}`);
+        return;
+      }
+      
+      console.log('🔍 Step 3: Checking metadata cards_meta...');
+      const metaValue = await storage.getItem('cards_meta');
+      console.log('🔍 Metadata result:', metaValue || 'Not found');
+      
+      if (!metaValue) {
+        setCloudData('❌ Metadata не найдена в CloudStorage');
+        return;
+      }
+      
+      const meta = JSON.parse(metaValue);
+      console.log('🔍 Parsed metadata:', meta);
+      
+      if (!meta.cardsBatches) {
+        setCloudData('❌ Invalid metadata structure');
+        return;
+      }
+      
+      console.log(`🔍 Step 4: Loading ${meta.cardsBatches} chunks...`);
+      const chunks: string[] = [];
+      
+      for (let i = 0; i < meta.cardsBatches; i++) {
+        const chunkKey = `cards_cardsBatch${i}`;
+        console.log(`🔍 Loading chunk ${i}: ${chunkKey}`);
+        const chunkContent = await storage.getItem(chunkKey);
+        console.log(`🔍 Chunk ${i} result:`, chunkContent ? `Found ${chunkContent.length} chars` : 'Missing!');
+        
+        if (!chunkContent) {
+          setCloudData(`❌ Missing chunk ${i}`);
+          return;
+        }
+        
+        chunks.push(chunkContent);
+      }
+      
+      const result = chunks.join('');
+      console.log(`🔍 Step 5: All chunks joined, total: ${result.length} chars`);
+      
+      setCloudData(`✅ Chunked data загружена (${result.length} символов):\n\n${result}`);
+      
+    } catch (error) {
+      console.error('🔍 ERROR:', error);
+      setCloudData(`❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      console.log('🔍 handleLoadFromCloud finished');
+      setIsLoadingCloud(false);
+    }
+  };
+
+  const handleCleanupConflicts = async () => {
+    if (confirm('Очистить конфликтующие данные в CloudStorage? Это удалит старые данные, которые могут мешать синхронизации.')) {
+      setIsRefreshing(true);
+      try {
+        await cleanupOldRegularItem('cards');
+        alert('✅ Конфликтующие данные очищены');
+        console.log('Conflicting data cleanup completed');
+      } catch (error) {
+        console.error('Failed to cleanup conflicts:', error);
+        alert('❌ Ошибка при очистке: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+        setIsRefreshing(false);
+      }
+    }
+  };
+
+  const handleInspectStorage = async () => {
+    setIsLoadingCloud(true);
+    setCloudData('');
+    try {
+      console.log('🔍 Inspecting CloudStorage...');
+      const report = await inspectCloudStorage();
+      setCloudData(report);
+    } catch (error) {
+      console.error('Failed to inspect CloudStorage:', error);
+      setCloudData(`❌ Ошибка инспекции: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingCloud(false);
+    }
+  };
+
   const handleExportLogs = () => {
     const logs = logger.getLogsAsText();
     const blob = new Blob([logs], { type: 'text/plain' });
@@ -93,6 +235,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     URL.revokeObjectURL(url);
   };
 
+  console.log('🔴 SettingsView render - isLoadingCloud:', isLoadingCloud, 'isRefreshing:', isRefreshing);
+  
   return (
     <div style={styles.container}>
       {/* Header */}
@@ -148,8 +292,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             >
               {isRefreshing ? '⏳ Загрузка...' : '☁️ Из облака'}
             </button>
+            <button 
+              style={styles.actionButton} 
+              onClick={() => {
+                console.log('🔴 КНОПКА НАЖАТА: Показать CloudStorage');
+                console.log('🔴 isLoadingCloud:', isLoadingCloud);
+                console.log('🔴 disabled:', isLoadingCloud);
+                handleLoadFromCloud();
+              }}
+              disabled={false}
+            >
+              {isLoadingCloud ? '⏳ Загружаем...' : '🔍 Показать CloudStorage (принудительно)'}
+            </button>
+            <button 
+              style={{...styles.actionButton, ...styles.dangerButton}} 
+              onClick={handleCleanupConflicts}
+              disabled={isRefreshing}
+            >
+              🧹 Очистить конфликты
+            </button>
+            <button 
+              style={styles.actionButton} 
+              onClick={handleInspectStorage}
+              disabled={isLoadingCloud}
+            >
+              {isLoadingCloud ? '⏳ Проверяем...' : '🔍 Инспекция CloudStorage'}
+            </button>
           </div>
         </div>
+
+        {/* CloudStorage Data section */}
+        {cloudData && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h2 style={styles.sectionTitle}>Данные из Telegram CloudStorage</h2>
+              <button style={styles.clearButton} onClick={() => setCloudData('')}>
+                Скрыть
+              </button>
+            </div>
+            <textarea
+              style={styles.logsTextarea}
+              value={cloudData}
+              readOnly
+              placeholder="Данные CloudStorage будут показаны здесь..."
+            />
+          </div>
+        )}
 
         {/* Logs section */}
         <div style={styles.section}>
