@@ -140,12 +140,16 @@ export class FSRSManager {
 
   // Get next card for study
   getNextCard(): CardData | null {
-    const dueCards = this.getDueCards();
-    if (dueCards.length === 0) return null;
+    const now = new Date();
     
-    // Sort by due date (earliest first)
-    dueCards.sort((a, b) => a.card.due.getTime() - b.card.due.getTime());
-    return dueCards[0];
+    // Find the first card in list order that is due for review
+    for (const cardData of this.cards) {
+      if (cardData.card.due <= now) {
+        return cardData;
+      }
+    }
+    
+    return null; // No cards are due
   }
 
   // Get scheduling info for a card (for showing next review times)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FSRSManager } from '../lib/fsrs';
 import { telegram } from '../lib/telegram';
+import { tryReadFromCloud } from '../lib/storage';
 
 interface EditViewProps {
   fsrs: FSRSManager;
@@ -13,6 +14,7 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
   const [hasChanges, setHasChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [originalTsv, setOriginalTsv] = useState('');
+  const [isLoadingCloud, setIsLoadingCloud] = useState(true);
   const saveCallbackRef = useRef<() => void>();
   const cancelCallbackRef = useRef<() => void>();
 
@@ -52,11 +54,42 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
   }, [handleSave, handleCancel]);
 
   useEffect(() => {
-    // Load current TSV data
-    const currentTsv = fsrs.exportTSV();
-    console.log('EditView: Loading current TSV data:', currentTsv.length, 'characters');
-    setTsvData(currentTsv);
-    setOriginalTsv(currentTsv);
+    const loadLatestData = async () => {
+      console.log('EditView: Starting to load latest data...');
+      setIsLoadingCloud(true);
+      
+      try {
+        // First try to get the latest version from cloud
+        console.log('EditView: Attempting to load from cloud...');
+        const cloudData = await tryReadFromCloud();
+        
+        let dataToUse: string;
+        if (cloudData) {
+          console.log('EditView: Using cloud data:', cloudData.length, 'characters');
+          // Create a temporary FSRS instance to parse cloud data
+          const tempFsrs = new FSRSManager();
+          tempFsrs.loadCards(cloudData);
+          dataToUse = tempFsrs.exportTSV();
+        } else {
+          console.log('EditView: No cloud data, using current local data');
+          dataToUse = fsrs.exportTSV();
+        }
+        
+        console.log('EditView: Setting TSV data:', dataToUse.length, 'characters');
+        setTsvData(dataToUse);
+        setOriginalTsv(dataToUse);
+        
+      } catch (error) {
+        console.error('EditView: Failed to load cloud data, using local:', error);
+        const localTsv = fsrs.exportTSV();
+        setTsvData(localTsv);
+        setOriginalTsv(localTsv);
+      } finally {
+        setIsLoadingCloud(false);
+      }
+    };
+    
+    loadLatestData();
     
     // Setup buttons
     const setupButtons = () => {
@@ -215,6 +248,13 @@ How to cook pasta?==1. Boil water\\n2. Add pasta\\n3. Cook for 8-10 minutes\\n4.
         </div>
       </div>
 
+      {/* Loading indicator */}
+      {isLoadingCloud && (
+        <div style={styles.loadingContainer}>
+          <span style={styles.loadingText}>⏳ Загрузка последней версии из облака...</span>
+        </div>
+      )}
+
       {/* Error message */}
       {error && (
         <div style={styles.errorContainer}>
@@ -234,12 +274,13 @@ World==Мир
 Cat==Кот
 Incomplete question"
           spellCheck={false}
+          disabled={isLoadingCloud}
         />
       </div>
 
       {/* Actions */}
       <div style={styles.actionsContainer}>
-        {!tsvData.trim() && (
+        {!tsvData.trim() && !isLoadingCloud && (
           <div>
             <button
               style={styles.demoButton}
@@ -395,5 +436,18 @@ const styles = {
     textAlign: 'center' as const,
     marginTop: '8px',
     fontStyle: 'italic',
+  },
+
+  loadingContainer: {
+    padding: '12px 16px',
+    backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
+    borderBottom: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
+    textAlign: 'center' as const,
+  },
+
+  loadingText: {
+    fontSize: '14px',
+    color: 'var(--tg-theme-button-color, #2481cc)',
+    fontWeight: '500',
   },
 };
