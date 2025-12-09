@@ -3,6 +3,7 @@ import { StudyView } from './components/StudyView';
 import { EditView } from './components/EditView';
 import { CardEditView } from './components/CardEditView';
 import { SettingsView } from './components/SettingsView';
+import { SyncIndicator } from './components/SyncIndicator';
 import { FSRSManager, CardData } from './lib/fsrs';
 import { storage, setChunkedItem, getChunkedItem } from './lib/storage';
 import { telegram } from './lib/telegram';
@@ -80,15 +81,15 @@ export const App: React.FC = () => {
       // Parse and validate the data
       fsrs.loadCards(tsvData);
       
-      // Save to storage
-      await setChunkedItem(STORAGE_KEY, tsvData);
+      // Save to storage (optimistic - instant)
+      setChunkedItem(STORAGE_KEY, tsvData);
       
-      console.log('Data saved successfully');
+      console.log('Data saved optimistically');
       setCurrentView('study');
       setError(null);
       
     } catch (err) {
-      console.error('Failed to save data:', err);
+      console.error('Failed to save data locally:', err);
       setError('Ошибка сохранения данных');
       throw err; // Re-throw to let EditView handle it
     }
@@ -97,10 +98,10 @@ export const App: React.FC = () => {
   const handleSaveProgress = async () => {
     try {
       const tsvData = fsrs.exportTSV();
-      await setChunkedItem(STORAGE_KEY, tsvData);
-      console.log('Progress saved automatically');
+      setChunkedItem(STORAGE_KEY, tsvData);
+      console.log('Progress saved optimistically');
     } catch (err) {
-      console.error('Failed to save progress:', err);
+      console.error('Failed to save progress locally:', err);
       // Don't show error to user for auto-save failures
     }
   };
@@ -121,16 +122,16 @@ export const App: React.FC = () => {
       currentEditCard.question = question;
       currentEditCard.answer = answer;
       
-      // Save to storage
-      await handleSaveProgress();
+      // Save to storage (optimistic - instant)
+      handleSaveProgress();
       
-      console.log('Card saved successfully');
+      console.log('Card saved optimistically');
       setCurrentView('study');
       setCurrentEditCard(null);
       setError(null);
       
     } catch (err) {
-      console.error('Failed to save card:', err);
+      console.error('Failed to save card locally:', err);
       setError('Ошибка сохранения карточки');
       throw err;
     }
@@ -162,16 +163,16 @@ export const App: React.FC = () => {
       // Remove the card from FSRS manager
       fsrs.removeCard(currentEditCard);
       
-      // Save to storage
-      await handleSaveProgress();
+      // Save to storage (optimistic - instant)
+      handleSaveProgress();
       
-      console.log('Card deleted successfully');
+      console.log('Card deleted optimistically');
       setCurrentView('study');
       setCurrentEditCard(null);
       setError(null);
       
     } catch (err) {
-      console.error('Failed to delete card:', err);
+      console.error('Failed to delete card locally:', err);
       setError('Ошибка удаления карточки');
     }
   };
@@ -205,6 +206,7 @@ export const App: React.FC = () => {
 
   return (
     <div style={styles.app}>
+      <SyncIndicator />
       {currentView === 'study' ? (
         <StudyView
           fsrs={fsrs}

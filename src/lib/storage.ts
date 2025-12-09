@@ -9,77 +9,149 @@ export interface StorageInterface {
 }
 
 class TelegramCloudStorage implements StorageInterface {
+  private createTimeoutPromise(timeoutMs: number, operation: string, key: string): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        console.error(`[CloudStorage] ${operation} timeout after ${timeoutMs}ms for key: ${key}`);
+        reject(new Error(`CloudStorage ${operation} timeout after ${timeoutMs}ms for key: ${key}. This may indicate a Telegram API issue or network problem.`));
+      }, timeoutMs);
+    });
+  }
+
   async setItem(key: string, value: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    console.log(`[CloudStorage] setItem called for key: ${key}, size: ${value.length} chars`);
+
+    const operationPromise = new Promise<void>((resolve, reject) => {
       if (!telegram.isCloudStorageAvailable()) {
+        console.error(`[CloudStorage] CloudStorage not available for key: ${key}`);
         reject(new Error('CloudStorage not available'));
         return;
       }
 
       const tg = (window as any).Telegram?.WebApp?.CloudStorage;
       if (!tg) {
+        console.error(`[CloudStorage] CloudStorage API not found for key: ${key}`);
         reject(new Error('CloudStorage API not found'));
         return;
       }
 
+      console.log(`[CloudStorage] Calling tg.setItem for key: ${key}...`);
+
       tg.setItem(key, value, (error: string | null, success: boolean) => {
+        const duration = Date.now() - startTime;
+
         if (error) {
+          console.error(`[CloudStorage] setItem failed for key ${key} after ${duration}ms:`, error);
           reject(new Error(error));
         } else if (success) {
+          console.log(`[CloudStorage] setItem succeeded for key ${key} in ${duration}ms`);
           resolve();
         } else {
+          console.error(`[CloudStorage] setItem returned false for key ${key} after ${duration}ms`);
           reject(new Error('Failed to save data'));
         }
       });
     });
+
+    const timeoutPromise = this.createTimeoutPromise(15000, 'setItem', key); // 15 second timeout for chunks
+
+    try {
+      await Promise.race([operationPromise, timeoutPromise]);
+    } catch (error) {
+      console.error(`[CloudStorage] setItem operation failed or timed out for key ${key}:`, error);
+      throw error;
+    }
   }
 
   async getItem(key: string): Promise<string | null> {
-    return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    console.log(`[CloudStorage] getItem called for key: ${key}`);
+
+    const operationPromise = new Promise<string | null>((resolve, reject) => {
       if (!telegram.isCloudStorageAvailable()) {
+        console.error(`[CloudStorage] CloudStorage not available for key: ${key}`);
         reject(new Error('CloudStorage not available'));
         return;
       }
 
       const tg = (window as any).Telegram?.WebApp?.CloudStorage;
       if (!tg) {
+        console.error(`[CloudStorage] CloudStorage API not found for key: ${key}`);
         reject(new Error('CloudStorage API not found'));
         return;
       }
 
+      console.log(`[CloudStorage] Calling tg.getItem for key: ${key}...`);
+
       tg.getItem(key, (error: string | null, value: string | null) => {
+        const duration = Date.now() - startTime;
+
         if (error) {
+          console.error(`[CloudStorage] getItem failed for key ${key} after ${duration}ms:`, error);
           reject(new Error(error));
         } else {
+          const size = value ? value.length : 0;
+          console.log(`[CloudStorage] getItem succeeded for key ${key} in ${duration}ms, size: ${size} chars`);
           resolve(value);
         }
       });
     });
+
+    const timeoutPromise = this.createTimeoutPromise(10000, 'getItem', key); // 10 second timeout
+
+    try {
+      return await Promise.race([operationPromise, timeoutPromise]);
+    } catch (error) {
+      console.error(`[CloudStorage] getItem operation failed or timed out for key ${key}:`, error);
+      throw error;
+    }
   }
 
   async removeItem(key: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    console.log(`[CloudStorage] removeItem called for key: ${key}`);
+
+    const operationPromise = new Promise<void>((resolve, reject) => {
       if (!telegram.isCloudStorageAvailable()) {
+        console.error(`[CloudStorage] CloudStorage not available for key: ${key}`);
         reject(new Error('CloudStorage not available'));
         return;
       }
 
       const tg = (window as any).Telegram?.WebApp?.CloudStorage;
       if (!tg) {
+        console.error(`[CloudStorage] CloudStorage API not found for key: ${key}`);
         reject(new Error('CloudStorage API not found'));
         return;
       }
 
+      console.log(`[CloudStorage] Calling tg.removeItem for key: ${key}...`);
+
       tg.removeItem(key, (error: string | null, success: boolean) => {
+        const duration = Date.now() - startTime;
+
         if (error) {
+          console.error(`[CloudStorage] removeItem failed for key ${key} after ${duration}ms:`, error);
           reject(new Error(error));
         } else if (success) {
+          console.log(`[CloudStorage] removeItem succeeded for key ${key} in ${duration}ms`);
           resolve();
         } else {
+          console.error(`[CloudStorage] removeItem returned false for key ${key} after ${duration}ms`);
           reject(new Error('Failed to remove data'));
         }
       });
     });
+
+    const timeoutPromise = this.createTimeoutPromise(10000, 'removeItem', key); // 10 second timeout
+
+    try {
+      await Promise.race([operationPromise, timeoutPromise]);
+    } catch (error) {
+      console.error(`[CloudStorage] removeItem operation failed or timed out for key ${key}:`, error);
+      throw error;
+    }
   }
 
   async clear(): Promise<void> {
@@ -173,21 +245,17 @@ class StorageManager {
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    const startTime = Date.now();
+    console.log(`[Storage] Starting setItem for key: ${key}, value size: ${value.length} chars`);
+
     try {
       await this.storage.setItem(key, value);
-      console.log(`Saved to storage: ${key}`);
+      const duration = Date.now() - startTime;
+      console.log(`[Storage] Saved to storage: ${key} in ${duration}ms`);
     } catch (error) {
-      console.error(`Failed to save ${key}:`, error);
-
-      // Fallback to localStorage if CloudStorage fails
-      if (this.storage === this.cloudStorage) {
-        console.log('Falling back to localStorage...');
-        this.storage = this.localStorage;
-        await this.storage.setItem(key, value);
-        console.log(`Saved to localStorage fallback: ${key}`);
-      } else {
-        throw error;
-      }
+      const duration = Date.now() - startTime;
+      console.error(`[Storage] Failed to save ${key} after ${duration}ms:`, error);
+      throw error;
     }
   }
 
@@ -198,17 +266,7 @@ class StorageManager {
       return value;
     } catch (error) {
       console.error(`Failed to load ${key}:`, error);
-
-      // Fallback to localStorage if CloudStorage fails
-      if (this.storage === this.cloudStorage) {
-        console.log('Falling back to localStorage...');
-        this.storage = this.localStorage;
-        const value = await this.storage.getItem(key);
-        console.log(`Loaded from localStorage fallback: ${key}`, value ? 'found' : 'not found');
-        return value;
-      } else {
-        throw error;
-      }
+      throw error;
     }
   }
 
@@ -218,16 +276,7 @@ class StorageManager {
       console.log(`Removed from storage: ${key}`);
     } catch (error) {
       console.error(`Failed to remove ${key}:`, error);
-
-      // Fallback to localStorage if CloudStorage fails
-      if (this.storage === this.cloudStorage) {
-        console.log('Falling back to localStorage...');
-        this.storage = this.localStorage;
-        await this.storage.removeItem(key);
-        console.log(`Removed from localStorage fallback: ${key}`);
-      } else {
-        throw error;
-      }
+      throw error;
     }
   }
 
@@ -249,17 +298,66 @@ class StorageManager {
 export const storage = new StorageManager();
 
 // Chunked storage methods for handling large data
-const MAX_CHUNK_SIZE = 3800;
+// Telegram CloudStorage seems to have issues with large values
+// Using smaller chunks and localStorage fallback for reliability
+const MAX_CHUNK_SIZE = 1500;
+
+import { syncStatus } from './syncStatus';
 
 export async function setChunkedItem(key: string, value: string): Promise<void> {
+  console.log(`[ChunkedStorage] Starting optimistic save for key: ${key}, size: ${value.length} chars`);
+  
   try {
+    // 1. Save to localStorage immediately (optimistic)
+    localStorage.setItem(`${key}_local`, value);
+    localStorage.setItem(`${key}_local_timestamp`, new Date().toISOString());
+    syncStatus.markAsModified();
+    console.log(`[ChunkedStorage] ✅ Saved to localStorage immediately`);
+    
+    // Verify localStorage save
+    const verifyValue = localStorage.getItem(`${key}_local`);
+    if (verifyValue === null || verifyValue.length !== value.length) {
+      console.error(`[ChunkedStorage] LocalStorage verification failed! Expected ${value.length} chars, got ${verifyValue?.length || 0}`);
+      throw new Error('LocalStorage save verification failed');
+    }
+    console.log(`[ChunkedStorage] ✅ LocalStorage save verified: ${verifyValue.length} chars`);
+
+    // 2. Start background sync to CloudStorage (don't await - fire and forget)
+    setTimeout(() => syncToCloudBackground(key, value), 0);
+
+    // 3. Return immediately - UI can continue
+    return;
+
+  } catch (error) {
+    console.error(`[ChunkedStorage] Failed to save locally:`, error);
+    throw new Error(`Ошибка сохранения данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function syncToCloudBackground(key: string, value: string): Promise<void> {
+  console.log(`[ChunkedStorage] Starting background sync to CloudStorage for key: ${key}, size: ${value.length} chars`);
+  
+  try {
+    syncStatus.markAsSyncing();
+    
     // If data fits in one chunk, use regular storage
     if (value.length <= MAX_CHUNK_SIZE) {
+      console.log(`[ChunkedStorage] Data fits in single chunk (${value.length} <= ${MAX_CHUNK_SIZE}), using regular storage`);
       await storage.setItem(key, value);
+      console.log(`[ChunkedStorage] Regular storage save completed, cleaning up old chunks...`);
       // Clean up any existing chunks
       await cleanupChunks(key);
+      console.log(`[ChunkedStorage] Cleanup completed, background sync finished`);
+      
+      // Keep local copy as backup - don't remove it automatically
+      // localStorage.removeItem(`${key}_local`);
+      // localStorage.removeItem(`${key}_local_timestamp`);
+      console.log(`[ChunkedStorage] Keeping local copy as backup for reliability`);
+      syncStatus.markAsSynced();
       return;
     }
+
+    console.log(`[ChunkedStorage] Data too large (${value.length} > ${MAX_CHUNK_SIZE}), splitting into chunks...`);
 
     // Split into chunks
     const chunks: string[] = [];
@@ -267,114 +365,202 @@ export async function setChunkedItem(key: string, value: string): Promise<void> 
       chunks.push(value.slice(i, i + MAX_CHUNK_SIZE));
     }
 
+    console.log(`[ChunkedStorage] Split into ${chunks.length} chunks:`, chunks.map((chunk, i) => `chunk${i}: ${chunk.length} chars`));
+
     // Save metadata
     const meta = {
       cardsBatches: chunks.length
     };
+    console.log(`[ChunkedStorage] Saving metadata:`, meta);
+    
+    const startTime = Date.now();
     await storage.setItem(`${key}_meta`, JSON.stringify(meta));
+    console.log(`[ChunkedStorage] Metadata saved in ${Date.now() - startTime}ms`);
 
-    // Save chunks
+    // Save chunks with progress feedback
     for (let i = 0; i < chunks.length; i++) {
-      const chunkData = {
-        content: chunks[i]
-      };
-      await storage.setItem(`${key}_cardsBatch${i}`, JSON.stringify(chunkData));
+      const progressMsg = `Синхронизация части ${i + 1} из ${chunks.length}...`;
+      console.log(`[ChunkedStorage] ${progressMsg} (size: ${chunks[i].length} chars)`);
+      
+      const chunkStartTime = Date.now();
+      const chunkKey = `${key}_cardsBatch${i}`;
+      const chunkContent = chunks[i];
+      
+      console.log(`[ChunkedStorage] About to call storage.setItem for ${chunkKey}, content size: ${chunkContent.length} chars`);
+      
+      // Validate chunk size before sending
+      if (chunkContent.length > 2000) {
+        console.error(`[ChunkedStorage] Chunk too large: ${chunkContent.length} chars > 2000 limit`);
+        throw new Error(`Chunk ${i} is too large: ${chunkContent.length} chars`);
+      }
+
+      await storage.setItem(chunkKey, chunkContent);
+      
+      const chunkTime = Date.now() - chunkStartTime;
+      console.log(`[ChunkedStorage] ✅ Chunk ${i + 1}/${chunks.length} synced successfully in ${chunkTime}ms`);
+      
+      // Progress feedback
+      const progress = Math.round(((i + 1) / chunks.length) * 100);
+      console.log(`[ChunkedStorage] 📊 Sync Progress: ${progress}% (${i + 1}/${chunks.length} chunks)`);
+      
+      // Add delay between chunks to prevent API overload
+      if (i < chunks.length - 1) {
+        console.log(`[ChunkedStorage] ⏳ Waiting 300ms before next chunk...`);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log(`[ChunkedStorage] ⏳ Proceeding to chunk ${i + 2}/${chunks.length}`);
+      }
     }
 
+    console.log(`[ChunkedStorage] All chunks synced, cleaning up extra chunks...`);
     // Clean up any extra chunks from previous saves
     await cleanupExtraChunks(key, chunks.length);
+    
+    const totalTime = Date.now() - startTime;
+    console.log(`[ChunkedStorage] Background sync completed successfully in ${totalTime}ms`);
+    
+    // Keep local copy as backup - don't remove it automatically
+    // localStorage.removeItem(`${key}_local`);
+    // localStorage.removeItem(`${key}_local_timestamp`);
+    console.log(`[ChunkedStorage] Keeping local copy as backup for reliability`);
+    syncStatus.markAsSynced();
 
   } catch (error) {
-    console.error(`Failed to save chunked item ${key}:`, error);
-    throw new Error(`Ошибка сохранения данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error(`[ChunkedStorage] Background sync failed for key ${key}:`, error);
+    syncStatus.markSyncFailed();
+    // Don't throw - this is background operation, data is safely in localStorage
   }
 }
 
 export async function getChunkedItem(key: string): Promise<string | null> {
+  console.log(`[ChunkedStorage] Starting getChunkedItem for key: ${key}`);
+  
   try {
-    // Try to get regular item first
+    // 1. Check localStorage first for most recent data
+    const localValue = localStorage.getItem(`${key}_local`);
+    if (localValue !== null) {
+      console.log(`[ChunkedStorage] ✅ Found local data, size: ${localValue.length} chars (most recent)`);
+      return localValue;
+    }
+
+    // 2. Try to get regular item from CloudStorage
+    console.log(`[ChunkedStorage] No local data, trying CloudStorage regular item...`);
     const regularValue = await storage.getItem(key);
     if (regularValue !== null) {
+      console.log(`[ChunkedStorage] Found regular item in CloudStorage, size: ${regularValue.length} chars`);
       return regularValue;
     }
 
-    // Try to get chunked data
+    console.log(`[ChunkedStorage] Regular item not found, trying chunked data...`);
+
+    // 3. Try to get chunked data from CloudStorage
     const metaValue = await storage.getItem(`${key}_meta`);
     if (!metaValue) {
+      console.log(`[ChunkedStorage] No metadata found, returning null`);
       return null;
     }
+
+    console.log(`[ChunkedStorage] Found metadata:`, metaValue);
 
     let meta;
     try {
       meta = JSON.parse(metaValue);
     } catch {
+      console.error(`[ChunkedStorage] Failed to parse metadata JSON`);
       throw new Error('Invalid meta data format');
     }
 
     if (!meta.cardsBatches || typeof meta.cardsBatches !== 'number') {
+      console.error(`[ChunkedStorage] Invalid metadata structure:`, meta);
       throw new Error('Invalid meta data structure');
     }
+
+    console.log(`[ChunkedStorage] Metadata parsed, expecting ${meta.cardsBatches} chunks`);
 
     // Load all chunks
     const chunks: string[] = [];
     for (let i = 0; i < meta.cardsBatches; i++) {
-      const chunkValue = await storage.getItem(`${key}_cardsBatch${i}`);
-      if (!chunkValue) {
+      console.log(`[ChunkedStorage] Loading chunk ${i}/${meta.cardsBatches - 1}...`);
+      
+      const chunkContent = await storage.getItem(`${key}_cardsBatch${i}`);
+      if (!chunkContent) {
+        console.error(`[ChunkedStorage] Missing chunk ${i} of ${meta.cardsBatches}`);
         throw new Error(`Missing chunk ${i} of ${meta.cardsBatches}`);
       }
 
-      let chunkData;
-      try {
-        chunkData = JSON.parse(chunkValue);
-      } catch {
-        throw new Error(`Invalid chunk ${i} data format`);
-      }
-
-      if (!chunkData.content || typeof chunkData.content !== 'string') {
-        throw new Error(`Invalid chunk ${i} data structure`);
-      }
-
-      chunks.push(chunkData.content);
+      console.log(`[ChunkedStorage] Chunk ${i} loaded, content size: ${chunkContent.length} chars`);
+      chunks.push(chunkContent);
     }
 
-    return chunks.join('');
+    const result = chunks.join('');
+    console.log(`[ChunkedStorage] All chunks loaded and joined, total size: ${result.length} chars`);
+    return result;
 
   } catch (error) {
-    console.error(`Failed to load chunked item ${key}:`, error);
+    console.error(`[ChunkedStorage] Failed to load chunked item ${key}:`, error);
     throw new Error(`Ошибка загрузки данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
 async function cleanupChunks(key: string): Promise<void> {
+  console.log(`[ChunkedStorage] Starting cleanup for key: ${key}`);
+
   try {
     const metaValue = await storage.getItem(`${key}_meta`);
     if (metaValue) {
-      await storage.removeItem(`${key}_meta`);
+      console.log(`[ChunkedStorage] Found metadata to cleanup:`, metaValue);
 
-      const meta = JSON.parse(metaValue);
+      await storage.removeItem(`${key}_meta`);
+      console.log(`[ChunkedStorage] Removed metadata`);
+
+      let meta;
+      try {
+        meta = JSON.parse(metaValue);
+      } catch {
+        console.error(`[ChunkedStorage] Failed to parse metadata during cleanup`);
+        return;
+      }
+
       if (meta.cardsBatches && typeof meta.cardsBatches === 'number') {
+        console.log(`[ChunkedStorage] Removing ${meta.cardsBatches} chunk(s)`);
+
         for (let i = 0; i < meta.cardsBatches; i++) {
           await storage.removeItem(`${key}_cardsBatch${i}`);
+          console.log(`[ChunkedStorage] Removed chunk ${i}`);
         }
       }
+    } else {
+      console.log(`[ChunkedStorage] No metadata found for cleanup`);
     }
-  } catch {
+
+    console.log(`[ChunkedStorage] Cleanup completed for key: ${key}`);
+  } catch (error) {
+    console.error(`[ChunkedStorage] Cleanup error for key ${key}:`, error);
     // Ignore cleanup errors
   }
 }
 
 async function cleanupExtraChunks(key: string, currentBatchCount: number): Promise<void> {
+  console.log(`[ChunkedStorage] Starting extra chunks cleanup for key: ${key}, keeping ${currentBatchCount} chunks`);
+
   try {
+    let removedCount = 0;
     // Try to remove chunks beyond the current count
     for (let i = currentBatchCount; i < currentBatchCount + 10; i++) {
       try {
+        console.log(`[ChunkedStorage] Trying to remove extra chunk ${i}...`);
         await storage.removeItem(`${key}_cardsBatch${i}`);
+        removedCount++;
+        console.log(`[ChunkedStorage] Removed extra chunk ${i}`);
       } catch {
         // Stop when we can't find more chunks
+        console.log(`[ChunkedStorage] No more extra chunks to remove after chunk ${i - 1}`);
         break;
       }
     }
-  } catch {
+
+    console.log(`[ChunkedStorage] Extra chunks cleanup completed, removed ${removedCount} chunks`);
+  } catch (error) {
+    console.error(`[ChunkedStorage] Extra chunks cleanup error:`, error);
     // Ignore cleanup errors
   }
 }
@@ -409,7 +595,35 @@ export async function testChunkedStorage(): Promise<void> {
     console.log('✓ All chunked storage tests passed!');
 
   } catch (error) {
-    console.error('Chunked storage test failed:', error);
+    console.error(`[ChunkedStorage] Failed to get chunked data:`, error);
     throw error;
+  }
+}
+
+// Function to manually clean up old localStorage data
+export function clearLocalStorage(key: string): void {
+  console.log(`[ChunkedStorage] Manually clearing localStorage for key: ${key}`);
+  try {
+    localStorage.removeItem(`${key}_local`);
+    localStorage.removeItem(`${key}_local_timestamp`);
+    console.log(`[ChunkedStorage] LocalStorage cleared successfully`);
+  } catch (error) {
+    console.error(`[ChunkedStorage] Failed to clear localStorage:`, error);
+  }
+}
+
+// Function to get localStorage info for debugging
+export function getLocalStorageInfo(key: string): {hasLocal: boolean, timestamp: string | null, size: number} {
+  try {
+    const localValue = localStorage.getItem(`${key}_local`);
+    const timestamp = localStorage.getItem(`${key}_local_timestamp`);
+    return {
+      hasLocal: localValue !== null,
+      timestamp,
+      size: localValue ? localValue.length : 0
+    };
+  } catch (error) {
+    console.error(`[ChunkedStorage] Failed to get localStorage info:`, error);
+    return {hasLocal: false, timestamp: null, size: 0};
   }
 }
