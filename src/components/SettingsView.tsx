@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { logger } from '../lib/logger';
-import { getLocalStorageInfo, clearLocalStorage, getChunkedItem, setChunkedItem, cleanupOldRegularItem, inspectCloudStorage, storage } from '../lib/storage';
+import { getLocalStorageInfo, clearLocalStorage, tryReadFromCloud, tryWriteToCloud, downloadAndShowCloudData, migrateOldDataToNewFormat } from '../lib/storage';
+import { syncStatus, SyncStatus } from '../lib/syncStatus';
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -9,8 +10,10 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [logsText, setLogsText] = useState(logger.getLogsAsText());
-  const [storageInfo, setStorageInfo] = useState(getLocalStorageInfo('cards'));
+  const [storageInfo, setStorageInfo] = useState(getLocalStorageInfo());
+  const [syncStatusData, setSyncStatusData] = useState<SyncStatus>(syncStatus.getStatus());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [cloudData, setCloudData] = useState<string>('');
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
 
@@ -21,9 +24,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     }
   }, [logsText]);
 
+  useEffect(() => {
+    // Subscribe to sync status updates
+    const unsubscribe = syncStatus.subscribe(setSyncStatusData);
+    return unsubscribe;
+  }, []);
+
   const refreshData = () => {
     setLogsText(logger.getLogsAsText());
-    setStorageInfo(getLocalStorageInfo('cards'));
+    setStorageInfo(getLocalStorageInfo());
+    setSyncStatusData(syncStatus.getStatus());
   };
 
   const handleClearLogs = () => {
@@ -34,330 +44,275 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   };
 
   const handleClearLocalStorage = () => {
-    if (confirm('Очистить локальное хранилище? Это может помочь при проблемах с синхронизацией.')) {
-      clearLocalStorage('cards');
+    if (confirm('Очистить локальное хранилище? Это сбросит все данные и ревизии.')) {
+      clearLocalStorage();
       refreshData();
+      alert('Локальное хранилище очищено. Перезагрузите страницу для инициализации.');
     }
   };
 
-  const handleForceReload = async () => {
-    if (confirm('Перезагрузить данные из облачного хранилища? Несохраненные изменения будут потеряны.')) {
+  const handleForceCloudRead = async () => {
+    if (confirm('Принудительно загрузить данные из облака? Локальные изменения будут потеряны.')) {
       setIsRefreshing(true);
       try {
-        // Clear localStorage first
-        clearLocalStorage('cards');
-        
-        // Force load from cloud storage directly
-        console.log('🔍 Step 1: Starting forced cloud reload...');
-        
-        // Check regular item first
-        console.log('🔍 Step 2: Checking regular item cards...');
-        const regularValue = await storage.getItem('cards');
-        console.log('🔍 Regular item result:', regularValue ? `Found ${regularValue.length} chars` : 'Not found');
-        
-        let cloudData = regularValue;
-        
-        if (!regularValue) {
-          console.log('🔍 Step 3: Checking metadata cards_meta...');
-          const metaValue = await storage.getItem('cards_meta');
-          console.log('🔍 Metadata result:', metaValue || 'Not found');
-          
-          if (metaValue) {
-            const meta = JSON.parse(metaValue);
-            console.log('🔍 Parsed metadata:', meta);
-            
-            if (meta.cardsBatches) {
-              console.log(`🔍 Step 4: Loading ${meta.cardsBatches} chunks...`);
-              const chunks: string[] = [];
-              
-              for (let i = 0; i < meta.cardsBatches; i++) {
-                const chunkKey = `cards_cardsBatch${i}`;
-                console.log(`🔍 Loading chunk ${i}: ${chunkKey}`);
-                const chunkContent = await storage.getItem(chunkKey);
-                console.log(`🔍 Chunk ${i} result:`, chunkContent ? `Found ${chunkContent.length} chars` : 'Missing!');
-                
-                if (chunkContent) {
-                  chunks.push(chunkContent);
-                }
-              }
-              
-              if (chunks.length === meta.cardsBatches) {
-                cloudData = chunks.join('');
-                console.log(`🔍 Step 5: All chunks joined, total: ${cloudData.length} chars`);
-              }
-            }
-          }
-        }
-        
+        const cloudData = await tryReadFromCloud();
         if (cloudData) {
-          // Update localStorage with cloud data
-          localStorage.setItem('cards_local', cloudData);
-          localStorage.setItem('cards_local_timestamp', new Date().toISOString());
-          console.log('Reloaded data from cloud storage and updated localStorage');
+          refreshData();
+          alert('Данные успешно загружены из облака');
         } else {
-          console.log('No cloud data found');
+          alert('Данные в облаке не найдены');
         }
-        
-        refreshData();
-        alert('Данные перезагружены из облачного хранилища');
       } catch (error) {
-        console.error('Failed to reload from cloud:', error);
-        alert('Ошибка при перезагрузке данных');
+        console.error('Failed to read from cloud:', error);
+        alert('Ошибка при загрузке данных из облака');
       } finally {
         setIsRefreshing(false);
       }
     }
   };
 
-  const handleTestStorage = async () => {
-    const testData = `test_${Date.now()}`;
-    try {
-      await setChunkedItem('test', testData);
-      const retrieved = await getChunkedItem('test');
-      if (retrieved === testData) {
-        alert('✅ Тест хранилища пройден успешно');
-      } else {
-        alert('❌ Тест хранилища не пройден: данные не совпадают');
+  const handleForceCloudWrite = async () => {
+    if (confirm('Принудительно записать локальные данные в облако?')) {
+      setIsTesting(true);
+      try {
+        const success = await tryWriteToCloud();
+        if (success) {
+          refreshData();
+          alert('Данные успешно записаны в облако');
+        } else {
+          alert('Не удалось записать данные в облако');
+        }
+      } catch (error) {
+        console.error('Failed to write to cloud:', error);
+        alert('Ошибка при записи данных в облако');
+      } finally {
+        setIsTesting(false);
       }
-    } catch (error) {
-      console.error('Storage test failed:', error);
-      alert('❌ Тест хранилища не пройден: ' + error);
     }
   };
 
-  const handleLoadFromCloud = async () => {
-    console.log('🔍 handleLoadFromCloud called!');
+  const handleInspectCloud = async () => {
     setIsLoadingCloud(true);
-    setCloudData('Загрузка...');
+    setCloudData('Загрузка данных из облака...');
     
     try {
-      console.log('🔍 Step 1: Starting getChunkedItemFromCloud...');
-      
-      // Manual implementation with detailed logging
-      console.log('🔍 Step 2: Checking regular item cards...');
-      const regularValue = await storage.getItem('cards');
-      console.log('🔍 Regular item result:', regularValue ? `Found ${regularValue.length} chars` : 'Not found');
-      
-      if (regularValue) {
-        setCloudData(`✅ Regular item найден (${regularValue.length} символов):\n\n${regularValue}`);
-        return;
-      }
-      
-      console.log('🔍 Step 3: Checking metadata cards_meta...');
-      const metaValue = await storage.getItem('cards_meta');
-      console.log('🔍 Metadata result:', metaValue || 'Not found');
-      
-      if (!metaValue) {
-        setCloudData('❌ Metadata не найдена в CloudStorage');
-        return;
-      }
-      
-      const meta = JSON.parse(metaValue);
-      console.log('🔍 Parsed metadata:', meta);
-      
-      if (!meta.cardsBatches) {
-        setCloudData('❌ Invalid metadata structure');
-        return;
-      }
-      
-      console.log(`🔍 Step 4: Loading ${meta.cardsBatches} chunks...`);
-      const chunks: string[] = [];
-      
-      for (let i = 0; i < meta.cardsBatches; i++) {
-        const chunkKey = `cards_cardsBatch${i}`;
-        console.log(`🔍 Loading chunk ${i}: ${chunkKey}`);
-        const chunkContent = await storage.getItem(chunkKey);
-        console.log(`🔍 Chunk ${i} result:`, chunkContent ? `Found ${chunkContent.length} chars` : 'Missing!');
-        
-        if (!chunkContent) {
-          setCloudData(`❌ Missing chunk ${i}`);
-          return;
-        }
-        
-        chunks.push(chunkContent);
-      }
-      
-      const result = chunks.join('');
-      console.log(`🔍 Step 5: All chunks joined, total: ${result.length} chars`);
-      
-      setCloudData(`✅ Chunked data загружена (${result.length} символов):\n\n${result}`);
-      
-    } catch (error) {
-      console.error('🔍 ERROR:', error);
-      setCloudData(`❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      console.log('🔍 handleLoadFromCloud finished');
-      setIsLoadingCloud(false);
-    }
-  };
-
-  const handleCleanupConflicts = async () => {
-    if (confirm('Очистить конфликтующие данные в CloudStorage? Это удалит старые данные, которые могут мешать синхронизации.')) {
-      setIsRefreshing(true);
-      try {
-        await cleanupOldRegularItem('cards');
-        alert('✅ Конфликтующие данные очищены');
-        console.log('Conflicting data cleanup completed');
-      } catch (error) {
-        console.error('Failed to cleanup conflicts:', error);
-        alert('❌ Ошибка при очистке: ' + (error instanceof Error ? error.message : 'Unknown error'));
-      } finally {
-        setIsRefreshing(false);
-      }
-    }
-  };
-
-  const handleInspectStorage = async () => {
-    setIsLoadingCloud(true);
-    setCloudData('');
-    try {
-      console.log('🔍 Inspecting CloudStorage...');
-      const report = await inspectCloudStorage();
+      const report = await downloadAndShowCloudData();
       setCloudData(report);
     } catch (error) {
-      console.error('Failed to inspect CloudStorage:', error);
-      setCloudData(`❌ Ошибка инспекции: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Failed to inspect cloud data:', error);
+      setCloudData(`❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoadingCloud(false);
     }
   };
 
-  const handleExportLogs = () => {
-    const logs = logger.getLogsAsText();
-    const blob = new Blob([logs], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `anki-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleMigrateOldData = async () => {
+    if (confirm('Попробовать мигрировать старые данные в новый формат? Это безопасная операция.')) {
+      setIsTesting(true);
+      try {
+        const success = await migrateOldDataToNewFormat();
+        if (success) {
+          refreshData();
+          alert('✅ Миграция завершена успешно!');
+        } else {
+          alert('ℹ️ Миграция не требуется или не удалась');
+        }
+      } catch (error) {
+        console.error('Migration failed:', error);
+        alert('❌ Ошибка миграции: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+        setIsTesting(false);
+      }
+    }
   };
 
-  console.log('🔴 SettingsView render - isLoadingCloud:', isLoadingCloud, 'isRefreshing:', isRefreshing);
-  
+  const handleResetRevisions = async () => {
+    if (confirm('Сбросить ревизии? Это установит локальную ревизию = 1, серверную = 0, что запустит синхронизацию.')) {
+      try {
+        // Force reset revisions
+        syncStatus.setLocalRevision(1);
+        syncStatus.setServerRevision(0);
+        refreshData();
+        alert('✅ Ревизии сброшены! Локальная = 1, серверная = 0');
+      } catch (error) {
+        console.error('Failed to reset revisions:', error);
+        alert('❌ Ошибка сброса ревизий');
+      }
+    }
+  };
+
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <button style={styles.backButton} onClick={onBack}>
+        <button
+          onClick={onBack}
+          style={styles.backButton}
+        >
           ← Назад
         </button>
-        <h1 style={styles.title}>Настройки</h1>
-        <button style={styles.refreshButton} onClick={refreshData}>
-          🔄
-        </button>
+        <h1 style={styles.title}>Настройки и диагностика</h1>
       </div>
 
-      {/* Content */}
       <div style={styles.content}>
-        {/* Storage Info */}
+        {/* Storage Info Section */}
         <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Состояние хранилища</h2>
-          <div style={styles.storageInfo}>
+          <h2 style={styles.sectionTitle}>Информация о хранилище</h2>
+          
+          <div style={styles.infoGrid}>
             <div style={styles.infoRow}>
               <span style={styles.infoLabel}>Локальные данные:</span>
               <span style={styles.infoValue}>
-                {storageInfo.hasLocal ? `✅ ${storageInfo.size} символов` : '❌ Отсутствуют'}
+                {storageInfo.hasData ? `✅ ${storageInfo.size} символов` : '❌ Отсутствуют'}
               </span>
             </div>
             <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>Время сохранения:</span>
+              <span style={styles.infoLabel}>Ревизия локальная:</span>
               <span style={styles.infoValue}>
-                {storageInfo.timestamp ? new Date(storageInfo.timestamp).toLocaleString('ru-RU') : '—'}
+                {storageInfo.revision || 0}
               </span>
             </div>
+            <div style={styles.infoRow}>
+              <span style={styles.infoLabel}>Ревизия сервера:</span>
+              <span style={styles.infoValue}>
+                {storageInfo.serverRevision || 0}
+              </span>
+            </div>
+            <div style={styles.infoRow}>
+              <span style={styles.infoLabel}>Статус синхронизации:</span>
+              <span style={styles.infoValue}>
+                {syncStatusData.isSyncing ? '🔄 Синхронизация...' :
+                 syncStatusData.hasUnsavedChanges ? '⚠️ Есть изменения' :
+                 '✅ Синхронизировано'}
+              </span>
+            </div>
+            {syncStatusData.lastSyncError && (
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>Ошибка синхронизации:</span>
+                <span style={{...styles.infoValue, color: '#ff6b6b'}}>
+                  {syncStatusData.lastSyncError}
+                </span>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Actions Section */}
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>Действия</h2>
           
-          <div style={styles.buttonGroup}>
-            <button 
-              style={styles.actionButton} 
-              onClick={handleTestStorage}
+          <div style={styles.buttonGrid}>
+            <button
+              onClick={refreshData}
+              style={styles.actionButton}
+            >
+              🔄 Обновить информацию
+            </button>
+            
+            <button
+              onClick={handleForceCloudRead}
+              style={styles.actionButton}
               disabled={isRefreshing}
             >
-              🧪 Тест хранилища
+              {isRefreshing ? '⏳ Загрузка...' : '⬇️ Загрузить из облака'}
             </button>
-            <button 
-              style={styles.actionButton} 
-              onClick={handleClearLocalStorage}
-              disabled={isRefreshing}
+            
+            <button
+              onClick={handleForceCloudWrite}
+              style={styles.actionButton}
+              disabled={isTesting}
             >
-              🗑️ Очистить кэш
+              {isTesting ? '⏳ Запись...' : '⬆️ Записать в облако'}
             </button>
-            <button 
-              style={{...styles.actionButton, ...styles.dangerButton}} 
-              onClick={handleForceReload}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? '⏳ Загрузка...' : '☁️ Из облака'}
-            </button>
-            <button 
-              style={styles.actionButton} 
-              onClick={() => {
-                console.log('🔴 КНОПКА НАЖАТА: Показать CloudStorage');
-                console.log('🔴 isLoadingCloud:', isLoadingCloud);
-                console.log('🔴 disabled:', isLoadingCloud);
-                handleLoadFromCloud();
-              }}
-              disabled={false}
-            >
-              {isLoadingCloud ? '⏳ Загружаем...' : '🔍 Показать CloudStorage (принудительно)'}
-            </button>
-            <button 
-              style={{...styles.actionButton, ...styles.dangerButton}} 
-              onClick={handleCleanupConflicts}
-              disabled={isRefreshing}
-            >
-              🧹 Очистить конфликты
-            </button>
-            <button 
-              style={styles.actionButton} 
-              onClick={handleInspectStorage}
+            
+            <button
+              onClick={handleInspectCloud}
+              style={styles.actionButton}
               disabled={isLoadingCloud}
             >
-              {isLoadingCloud ? '⏳ Проверяем...' : '🔍 Инспекция CloudStorage'}
+              {isLoadingCloud ? '⏳ Загружаем...' : '🔍 Показать данные из облака'}
+            </button>
+            
+            <button
+              onClick={handleMigrateOldData}
+              style={{...styles.actionButton, backgroundColor: '#ff9500'}}
+              disabled={isTesting}
+            >
+              {isTesting ? '⏳ Миграция...' : '🔄 Мигрировать старые данные'}
+            </button>
+
+            <button
+              onClick={handleResetRevisions}
+              style={{...styles.actionButton, backgroundColor: '#34c759'}}
+            >
+              🔢 Сбросить ревизии
+            </button>
+            
+            <button
+              onClick={handleClearLocalStorage}
+              style={{...styles.actionButton, backgroundColor: '#ff6b6b'}}
+            >
+              🗑️ Очистить локальные данные
             </button>
           </div>
         </div>
 
-        {/* CloudStorage Data section */}
+        {/* Cloud Data Section */}
         {cloudData && (
           <div style={styles.section}>
-            <div style={styles.sectionHeader}>
+            <div style={styles.logsHeader}>
               <h2 style={styles.sectionTitle}>Данные из Telegram CloudStorage</h2>
-              <button style={styles.clearButton} onClick={() => setCloudData('')}>
-                Скрыть
-              </button>
+              <div style={styles.logsActions}>
+                <button
+                  onClick={handleInspectCloud}
+                  style={styles.smallButton}
+                  disabled={isLoadingCloud}
+                >
+                  🔄 Обновить
+                </button>
+                <button
+                  onClick={() => setCloudData('')}
+                  style={{...styles.smallButton, backgroundColor: '#ff6b6b'}}
+                >
+                  🗑️ Скрыть
+                </button>
+              </div>
             </div>
+            
             <textarea
-              style={styles.logsTextarea}
               value={cloudData}
               readOnly
-              placeholder="Данные CloudStorage будут показаны здесь..."
+              style={styles.logsTextarea}
+              placeholder="Данные из облака появятся здесь..."
             />
           </div>
         )}
 
-        {/* Logs section */}
+        {/* Logs Section */}
         <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Логи приложения</h2>
-            <div style={styles.logButtons}>
-              <button style={styles.exportButton} onClick={handleExportLogs}>
-                💾 Экспорт
+          <div style={styles.logsHeader}>
+            <h2 style={styles.sectionTitle}>Логи отладки</h2>
+            <div style={styles.logsActions}>
+              <button
+                onClick={refreshData}
+                style={styles.smallButton}
+              >
+                🔄 Обновить
               </button>
-              <button style={styles.clearButton} onClick={handleClearLogs}>
-                Очистить
+              <button
+                onClick={handleClearLogs}
+                style={{...styles.smallButton, backgroundColor: '#ff6b6b'}}
+              >
+                🗑️ Очистить
               </button>
             </div>
           </div>
+          
           <textarea
             ref={textareaRef}
-            style={styles.logsTextarea}
             value={logsText}
             readOnly
-            placeholder="Логи пока отсутствуют..."
+            style={styles.logsTextarea}
+            placeholder="Логи появятся здесь..."
           />
         </div>
       </div>
@@ -367,189 +322,141 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
 const styles = {
   container: {
-    display: 'flex',
-    flexDirection: 'column' as const,
     height: '100vh',
     backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
     color: 'var(--tg-theme-text-color, #000000)',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    display: 'flex',
+    flexDirection: 'column' as const,
   },
 
   header: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: '16px',
+    borderBottom: '1px solid var(--tg-theme-section-separator-color, #e5e5e7)',
     backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
-    borderBottom: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
-    minHeight: '60px',
   },
 
   backButton: {
-    padding: '8px 12px',
-    backgroundColor: 'transparent',
-    color: 'var(--tg-theme-button-color, #2481cc)',
+    background: 'none',
     border: 'none',
-    borderRadius: '6px',
+    color: 'var(--tg-theme-link-color, #2481cc)',
     fontSize: '16px',
-    fontWeight: '500',
     cursor: 'pointer',
-    outline: 'none',
+    padding: '8px',
+    marginRight: '12px',
+    borderRadius: '8px',
     transition: 'background-color 0.2s ease',
   },
 
   title: {
-    fontSize: '18px',
+    fontSize: '20px',
     fontWeight: '600',
     margin: '0',
-    color: 'var(--tg-theme-text-color, #000000)',
-  },
-
-  clearButton: {
-    padding: '8px 12px',
-    backgroundColor: 'transparent',
-    color: 'var(--tg-theme-destructive-text-color, #ff3b30)',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    outline: 'none',
-    transition: 'background-color 0.2s ease',
-  },
-
-  refreshButton: {
-    padding: '8px 12px',
-    backgroundColor: 'transparent',
-    color: 'var(--tg-theme-button-color, #2481cc)',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    outline: 'none',
-    transition: 'background-color 0.2s ease',
+    flex: 1,
   },
 
   content: {
     flex: 1,
-    padding: '16px',
     overflow: 'auto',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '24px',
+    padding: '16px',
   },
 
   section: {
+    backgroundColor: 'var(--tg-theme-secondary-bg-color, #f8f9fa)',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '16px',
+  },
+
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    margin: '0 0 16px 0',
+    color: 'var(--tg-theme-text-color, #000000)',
+  },
+
+  infoGrid: {
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '12px',
-  },
-
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  storageInfo: {
-    padding: '12px',
-    backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
-    borderRadius: '8px',
-    border: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
+    gap: '8px',
   },
 
   infoRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '8px',
+    padding: '8px 0',
+    borderBottom: '1px solid var(--tg-theme-section-separator-color, #e5e5e7)',
   },
 
   infoLabel: {
     fontSize: '14px',
-    color: 'var(--tg-theme-hint-color, #999999)',
+    color: 'var(--tg-theme-hint-color, #8e8e93)',
+    fontWeight: '500',
   },
 
   infoValue: {
     fontSize: '14px',
-    fontWeight: '500',
     color: 'var(--tg-theme-text-color, #000000)',
+    fontWeight: '500',
+    textAlign: 'right' as const,
   },
 
-  buttonGroup: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap' as const,
+  buttonGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
   },
 
   actionButton: {
-    padding: '8px 12px',
+    padding: '12px 16px',
     backgroundColor: 'var(--tg-theme-button-color, #2481cc)',
     color: 'var(--tg-theme-button-text-color, #ffffff)',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
-    outline: 'none',
     transition: 'opacity 0.2s ease',
-    disabled: {
-      opacity: 0.5,
-      cursor: 'not-allowed',
-    },
+    minHeight: '44px',
   },
 
-  dangerButton: {
-    backgroundColor: 'var(--tg-theme-destructive-text-color, #ff3b30)',
+  logsHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
   },
 
-  logButtons: {
+  logsActions: {
     display: 'flex',
     gap: '8px',
   },
 
-  exportButton: {
-    padding: '8px 12px',
+  smallButton: {
+    padding: '6px 12px',
     backgroundColor: 'var(--tg-theme-button-color, #2481cc)',
     color: 'var(--tg-theme-button-text-color, #ffffff)',
     border: 'none',
     borderRadius: '6px',
-    fontSize: '14px',
+    fontSize: '12px',
     fontWeight: '500',
     cursor: 'pointer',
-    outline: 'none',
-    transition: 'background-color 0.2s ease',
-  },
-
-  logsSection: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px',
-    minHeight: '300px',
-  },
-
-  sectionTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    margin: '0',
-    color: 'var(--tg-theme-text-color, #000000)',
+    transition: 'opacity 0.2s ease',
   },
 
   logsTextarea: {
-    flex: 1,
-    minHeight: '300px',
+    width: '100%',
+    height: '300px',
     padding: '12px',
-    backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
+    backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
     color: 'var(--tg-theme-text-color, #000000)',
-    border: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
+    border: '1px solid var(--tg-theme-section-separator-color, #e5e5e7)',
     borderRadius: '8px',
     fontSize: '12px',
-    fontFamily: 'Monaco, Menlo, Consolas, "Courier New", monospace',
-    lineHeight: '1.4',
-    resize: 'none' as const,
+    fontFamily: 'Monaco, Consolas, "Courier New", monospace',
+    resize: 'vertical' as const,
     outline: 'none',
-    whiteSpace: 'pre-wrap' as const,
-    wordWrap: 'break-word' as const,
   },
 };

@@ -27,11 +27,27 @@ export const SyncIndicator: React.FC = () => {
           backgroundColor: status.isSyncing ? '#007AFF' : '#FF6B6B',
           animation: status.isSyncing ? 'pulse 2s infinite' : 'none',
         }}
-        title={status.isSyncing ? 'Синхронизация...' : 'Есть несохраненные изменения'}
+        title={getTooltipText(status)}
       />
       <style>{keyframes}</style>
     </div>
   );
+};
+
+const getTooltipText = (status: SyncStatus): string => {
+  if (status.isSyncing) {
+    return 'Синхронизация...';
+  }
+  
+  if (status.hasUnsavedChanges) {
+    return `Есть несохраненные изменения (локально: ${status.revisionLocal}, сервер: ${status.revisionServer})`;
+  }
+  
+  if (status.lastSyncError) {
+    return `Ошибка синхронизации: ${status.lastSyncError}`;
+  }
+  
+  return 'Синхронизировано';
 };
 
 const styles = {

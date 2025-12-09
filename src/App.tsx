@@ -5,13 +5,13 @@ import { CardEditView } from './components/CardEditView';
 import { SettingsView } from './components/SettingsView';
 import { SyncIndicator } from './components/SyncIndicator';
 import { FSRSManager, CardData } from './lib/fsrs';
-import { storage, setChunkedItem, getChunkedItem } from './lib/storage';
+import { initializeStorage, saveDataLocally } from './lib/storage';
 import { telegram } from './lib/telegram';
 import './lib/logger'; // Initialize logger early
 
 type View = 'study' | 'edit' | 'cardEdit' | 'settings';
 
-const STORAGE_KEY = 'cards';
+
 
 export const App: React.FC = () => {
   const [fsrs] = useState(() => new FSRSManager());
@@ -30,21 +30,18 @@ export const App: React.FC = () => {
       setError(null);
 
       console.log('Initializing Telegram Anki FSRS...');
-      console.log('Storage type:', storage.getStorageType());
       console.log('Telegram WebApp available:', telegram.isAvailable());
 
-      // Load cards from storage
-      const savedData = await getChunkedItem(STORAGE_KEY);
+      // Initialize storage and load cards
+      const data = await initializeStorage();
       
-      if (savedData) {
-        console.log('Loaded cards from storage');
-        fsrs.loadCards(savedData);
+      if (data) {
+        console.log('Loaded cards from storage system');
+        fsrs.loadCards(data);
       } else {
-        console.log('No saved data found, loading demo cards');
+        console.log('No data available, loading demo cards');
         const demoTsv = FSRSManager.getDemoTSV();
         fsrs.loadCards(demoTsv);
-        // Save demo cards to storage
-        await setChunkedItem(STORAGE_KEY, demoTsv);
       }
 
       const stats = fsrs.getStats();
@@ -76,20 +73,20 @@ export const App: React.FC = () => {
 
   const handleSave = async (tsvData: string) => {
     try {
-      console.log('Saving TSV data...');
+      console.log('[App] handleSave called - mass editing save with revision increment');
       
       // Parse and validate the data
       fsrs.loadCards(tsvData);
       
-      // Save to storage (optimistic - instant)
-      setChunkedItem(STORAGE_KEY, tsvData);
+      // Save to storage with revision increment
+      await saveDataLocally(tsvData, true);
       
-      console.log('Data saved optimistically');
+      console.log('[App] Mass editing data saved with new revision');
       setCurrentView('study');
       setError(null);
       
     } catch (err) {
-      console.error('Failed to save data locally:', err);
+      console.error('[App] Failed to save data locally:', err);
       setError('Ошибка сохранения данных');
       throw err; // Re-throw to let EditView handle it
     }
@@ -97,11 +94,12 @@ export const App: React.FC = () => {
 
   const handleSaveProgress = async () => {
     try {
+      console.log('[App] handleSaveProgress called - saving progress with revision increment');
       const tsvData = fsrs.exportTSV();
-      setChunkedItem(STORAGE_KEY, tsvData);
-      console.log('Progress saved optimistically');
+      await saveDataLocally(tsvData, true); // Always increment revision for progress save
+      console.log('[App] Progress saved successfully with revision increment');
     } catch (err) {
-      console.error('Failed to save progress locally:', err);
+      console.error('[App] Failed to save progress locally:', err);
       // Don't show error to user for auto-save failures
     }
   };
@@ -116,22 +114,23 @@ export const App: React.FC = () => {
     if (!currentEditCard) return;
     
     try {
-      console.log('Saving card edit...');
+      console.log('[App] handleCardSave called - single card edit with revision increment');
       
       // Update question and answer while preserving FSRS data
       currentEditCard.question = question;
       currentEditCard.answer = answer;
       
-      // Save to storage (optimistic - instant)
-      handleSaveProgress();
+      // Save to storage with revision increment (this is a user edit)
+      const tsvData = fsrs.exportTSV();
+      await saveDataLocally(tsvData, true);
       
-      console.log('Card saved optimistically');
+      console.log('[App] Card saved with new revision');
       setCurrentView('study');
       setCurrentEditCard(null);
       setError(null);
       
     } catch (err) {
-      console.error('Failed to save card locally:', err);
+      console.error('[App] Failed to save card locally:', err);
       setError('Ошибка сохранения карточки');
       throw err;
     }
@@ -158,21 +157,22 @@ export const App: React.FC = () => {
     }
     
     try {
-      console.log('Deleting card...');
+      console.log('[App] handleCardDelete called - card deletion with revision increment');
       
       // Remove the card from FSRS manager
       fsrs.removeCard(currentEditCard);
       
-      // Save to storage (optimistic - instant)
-      handleSaveProgress();
+      // Save to storage with revision increment (this is a user edit)
+      const tsvData = fsrs.exportTSV();
+      await saveDataLocally(tsvData, true);
       
-      console.log('Card deleted optimistically');
+      console.log('[App] Card deleted with new revision');
       setCurrentView('study');
       setCurrentEditCard(null);
       setError(null);
       
     } catch (err) {
-      console.error('Failed to delete card locally:', err);
+      console.error('[App] Failed to delete card locally:', err);
       setError('Ошибка удаления карточки');
     }
   };
