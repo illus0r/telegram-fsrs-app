@@ -9,9 +9,10 @@ interface StudyViewProps {
   onEditTSV: () => void;
   onCreateCard: () => void;
   onSaveProgress: () => Promise<void>;
+  onSettings: () => void;
 }
 
-export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onCreateCard, onSaveProgress }) => {
+export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onCreateCard, onSaveProgress, onSettings }) => {
   const [currentCard, setCurrentCard] = useState<CardData | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [stats, setStats] = useState(fsrs.getStats());
@@ -192,6 +193,13 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
                 <div style={styles.tableIconRow}></div>
               </div>
             </button>
+            <button
+              style={styles.settingsButton}
+              onClick={onSettings}
+              title="Настройки"
+            >
+              ⚙️
+            </button>
           </div>
         </div>
 
@@ -241,6 +249,13 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
               <div style={styles.tableIconRow}></div>
               <div style={styles.tableIconRow}></div>
             </div>
+          </button>
+          <button
+            style={styles.settingsButton}
+            onClick={onSettings}
+            title="Настройки"
+          >
+            ⚙️
           </button>
         </div>
       </div>
@@ -571,5 +586,21 @@ const styles = {
     height: '2px',
     backgroundColor: 'currentColor',
     borderRadius: '1px',
+  },
+
+  settingsButton: {
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    color: 'var(--tg-theme-hint-color, #8e8e93)',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    outline: 'none',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
   },
 };

@@ -161,8 +161,8 @@ class StorageManager {
 
   constructor() {
     // Try to use CloudStorage, fallback to localStorage
-    this.storage = telegram.isCloudStorageAvailable() 
-      ? this.cloudStorage 
+    this.storage = telegram.isCloudStorageAvailable()
+      ? this.cloudStorage
       : this.localStorage;
 
     console.log('Storage initialized:', {
@@ -178,7 +178,7 @@ class StorageManager {
       console.log(`Saved to storage: ${key}`);
     } catch (error) {
       console.error(`Failed to save ${key}:`, error);
-      
+
       // Fallback to localStorage if CloudStorage fails
       if (this.storage === this.cloudStorage) {
         console.log('Falling back to localStorage...');
@@ -198,7 +198,7 @@ class StorageManager {
       return value;
     } catch (error) {
       console.error(`Failed to load ${key}:`, error);
-      
+
       // Fallback to localStorage if CloudStorage fails
       if (this.storage === this.cloudStorage) {
         console.log('Falling back to localStorage...');
@@ -218,7 +218,7 @@ class StorageManager {
       console.log(`Removed from storage: ${key}`);
     } catch (error) {
       console.error(`Failed to remove ${key}:`, error);
-      
+
       // Fallback to localStorage if CloudStorage fails
       if (this.storage === this.cloudStorage) {
         console.log('Falling back to localStorage...');
@@ -249,7 +249,7 @@ class StorageManager {
 export const storage = new StorageManager();
 
 // Chunked storage methods for handling large data
-const MAX_CHUNK_SIZE = 4096;
+const MAX_CHUNK_SIZE = 3800;
 
 export async function setChunkedItem(key: string, value: string): Promise<void> {
   try {
@@ -350,7 +350,7 @@ async function cleanupChunks(key: string): Promise<void> {
     const metaValue = await storage.getItem(`${key}_meta`);
     if (metaValue) {
       await storage.removeItem(`${key}_meta`);
-      
+
       const meta = JSON.parse(metaValue);
       if (meta.cardsBatches && typeof meta.cardsBatches === 'number') {
         for (let i = 0; i < meta.cardsBatches; i++) {
@@ -383,7 +383,7 @@ async function cleanupExtraChunks(key: string, currentBatchCount: number): Promi
 export async function testChunkedStorage(): Promise<void> {
   try {
     console.log('Testing chunked storage...');
-    
+
     // Test with small data (should use regular storage)
     const smallData = 'Hello, world!';
     await setChunkedItem('test_small', smallData);
@@ -392,7 +392,7 @@ export async function testChunkedStorage(): Promise<void> {
       throw new Error('Small data test failed');
     }
     console.log('✓ Small data test passed');
-    
+
     // Test with large data (should use chunked storage)
     const largeData = 'A'.repeat(10000); // 10KB of data
     await setChunkedItem('test_large', largeData);
@@ -401,13 +401,13 @@ export async function testChunkedStorage(): Promise<void> {
       throw new Error('Large data test failed');
     }
     console.log('✓ Large data test passed');
-    
+
     // Cleanup test data
     await storage.removeItem('test_small');
     await cleanupChunks('test_large');
-    
+
     console.log('✓ All chunked storage tests passed!');
-    
+
   } catch (error) {
     console.error('Chunked storage test failed:', error);
     throw error;

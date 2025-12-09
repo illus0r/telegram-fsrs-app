@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { StudyView } from './components/StudyView';
 import { EditView } from './components/EditView';
 import { CardEditView } from './components/CardEditView';
+import { SettingsView } from './components/SettingsView';
 import { FSRSManager, CardData } from './lib/fsrs';
 import { storage, setChunkedItem, getChunkedItem } from './lib/storage';
 import { telegram } from './lib/telegram';
+import './lib/logger'; // Initialize logger early
 
-type View = 'study' | 'edit' | 'cardEdit';
+type View = 'study' | 'edit' | 'cardEdit' | 'settings';
 
 const STORAGE_KEY = 'cards';
 
@@ -139,6 +141,14 @@ export const App: React.FC = () => {
     setCurrentEditCard(null);
   };
 
+  const handleSettings = () => {
+    setCurrentView('settings');
+  };
+
+  const handleSettingsBack = () => {
+    setCurrentView('study');
+  };
+
   const handleCardDelete = async () => {
     if (!currentEditCard) return;
     
@@ -202,6 +212,7 @@ export const App: React.FC = () => {
           onEditTSV={handleEdit}
           onCreateCard={handleCreateCard}
           onSaveProgress={handleSaveProgress}
+          onSettings={handleSettings}
         />
       ) : currentView === 'edit' ? (
         <EditView
@@ -215,6 +226,10 @@ export const App: React.FC = () => {
           onSave={handleCardSave}
           onCancel={handleCardEditCancel}
           onDelete={handleCardDelete}
+        />
+      ) : currentView === 'settings' ? (
+        <SettingsView
+          onBack={handleSettingsBack}
         />
       ) : null}
     </div>
