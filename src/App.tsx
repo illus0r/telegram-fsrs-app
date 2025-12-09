@@ -3,7 +3,7 @@ import { StudyView } from './components/StudyView';
 import { EditView } from './components/EditView';
 import { CardEditView } from './components/CardEditView';
 import { FSRSManager, CardData } from './lib/fsrs';
-import { storage } from './lib/storage';
+import { storage, setChunkedItem, getChunkedItem } from './lib/storage';
 import { telegram } from './lib/telegram';
 
 type View = 'study' | 'edit' | 'cardEdit';
@@ -31,7 +31,7 @@ export const App: React.FC = () => {
       console.log('Telegram WebApp available:', telegram.isAvailable());
 
       // Load cards from storage
-      const savedData = await storage.getItem(STORAGE_KEY);
+      const savedData = await getChunkedItem(STORAGE_KEY);
       
       if (savedData) {
         console.log('Loaded cards from storage');
@@ -41,7 +41,7 @@ export const App: React.FC = () => {
         const demoTsv = FSRSManager.getDemoTSV();
         fsrs.loadCards(demoTsv);
         // Save demo cards to storage
-        await storage.setItem(STORAGE_KEY, demoTsv);
+        await setChunkedItem(STORAGE_KEY, demoTsv);
       }
 
       const stats = fsrs.getStats();
@@ -79,7 +79,7 @@ export const App: React.FC = () => {
       fsrs.loadCards(tsvData);
       
       // Save to storage
-      await storage.setItem(STORAGE_KEY, tsvData);
+      await setChunkedItem(STORAGE_KEY, tsvData);
       
       console.log('Data saved successfully');
       setCurrentView('study');
@@ -95,7 +95,7 @@ export const App: React.FC = () => {
   const handleSaveProgress = async () => {
     try {
       const tsvData = fsrs.exportTSV();
-      await storage.setItem(STORAGE_KEY, tsvData);
+      await setChunkedItem(STORAGE_KEY, tsvData);
       console.log('Progress saved automatically');
     } catch (err) {
       console.error('Failed to save progress:', err);

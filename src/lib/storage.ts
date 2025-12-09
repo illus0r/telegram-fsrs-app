@@ -247,3 +247,169 @@ class StorageManager {
 }
 
 export const storage = new StorageManager();
+
+// Chunked storage methods for handling large data
+const MAX_CHUNK_SIZE = 4096;
+
+export async function setChunkedItem(key: string, value: string): Promise<void> {
+  try {
+    // If data fits in one chunk, use regular storage
+    if (value.length <= MAX_CHUNK_SIZE) {
+      await storage.setItem(key, value);
+      // Clean up any existing chunks
+      await cleanupChunks(key);
+      return;
+    }
+
+    // Split into chunks
+    const chunks: string[] = [];
+    for (let i = 0; i < value.length; i += MAX_CHUNK_SIZE) {
+      chunks.push(value.slice(i, i + MAX_CHUNK_SIZE));
+    }
+
+    // Save metadata
+    const meta = {
+      cardsBatches: chunks.length
+    };
+    await storage.setItem(`${key}_meta`, JSON.stringify(meta));
+
+    // Save chunks
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkData = {
+        content: chunks[i]
+      };
+      await storage.setItem(`${key}_cardsBatch${i}`, JSON.stringify(chunkData));
+    }
+
+    // Clean up any extra chunks from previous saves
+    await cleanupExtraChunks(key, chunks.length);
+
+  } catch (error) {
+    console.error(`Failed to save chunked item ${key}:`, error);
+    throw new Error(`Ошибка сохранения данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+export async function getChunkedItem(key: string): Promise<string | null> {
+  try {
+    // Try to get regular item first
+    const regularValue = await storage.getItem(key);
+    if (regularValue !== null) {
+      return regularValue;
+    }
+
+    // Try to get chunked data
+    const metaValue = await storage.getItem(`${key}_meta`);
+    if (!metaValue) {
+      return null;
+    }
+
+    let meta;
+    try {
+      meta = JSON.parse(metaValue);
+    } catch {
+      throw new Error('Invalid meta data format');
+    }
+
+    if (!meta.cardsBatches || typeof meta.cardsBatches !== 'number') {
+      throw new Error('Invalid meta data structure');
+    }
+
+    // Load all chunks
+    const chunks: string[] = [];
+    for (let i = 0; i < meta.cardsBatches; i++) {
+      const chunkValue = await storage.getItem(`${key}_cardsBatch${i}`);
+      if (!chunkValue) {
+        throw new Error(`Missing chunk ${i} of ${meta.cardsBatches}`);
+      }
+
+      let chunkData;
+      try {
+        chunkData = JSON.parse(chunkValue);
+      } catch {
+        throw new Error(`Invalid chunk ${i} data format`);
+      }
+
+      if (!chunkData.content || typeof chunkData.content !== 'string') {
+        throw new Error(`Invalid chunk ${i} data structure`);
+      }
+
+      chunks.push(chunkData.content);
+    }
+
+    return chunks.join('');
+
+  } catch (error) {
+    console.error(`Failed to load chunked item ${key}:`, error);
+    throw new Error(`Ошибка загрузки данных: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function cleanupChunks(key: string): Promise<void> {
+  try {
+    const metaValue = await storage.getItem(`${key}_meta`);
+    if (metaValue) {
+      await storage.removeItem(`${key}_meta`);
+      
+      const meta = JSON.parse(metaValue);
+      if (meta.cardsBatches && typeof meta.cardsBatches === 'number') {
+        for (let i = 0; i < meta.cardsBatches; i++) {
+          await storage.removeItem(`${key}_cardsBatch${i}`);
+        }
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+async function cleanupExtraChunks(key: string, currentBatchCount: number): Promise<void> {
+  try {
+    // Try to remove chunks beyond the current count
+    for (let i = currentBatchCount; i < currentBatchCount + 10; i++) {
+      try {
+        await storage.removeItem(`${key}_cardsBatch${i}`);
+      } catch {
+        // Stop when we can't find more chunks
+        break;
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+// Test function for chunked storage
+export async function testChunkedStorage(): Promise<void> {
+  try {
+    console.log('Testing chunked storage...');
+    
+    // Test with small data (should use regular storage)
+    const smallData = 'Hello, world!';
+    await setChunkedItem('test_small', smallData);
+    const retrievedSmall = await getChunkedItem('test_small');
+    if (retrievedSmall !== smallData) {
+      throw new Error('Small data test failed');
+    }
+    console.log('✓ Small data test passed');
+    
+    // Test with large data (should use chunked storage)
+    const largeData = 'A'.repeat(10000); // 10KB of data
+    await setChunkedItem('test_large', largeData);
+    const retrievedLarge = await getChunkedItem('test_large');
+    if (retrievedLarge !== largeData) {
+      throw new Error('Large data test failed');
+    }
+    console.log('✓ Large data test passed');
+    
+    // Cleanup test data
+    await storage.removeItem('test_small');
+    await cleanupChunks('test_large');
+    
+    console.log('✓ All chunked storage tests passed!');
+    
+  } catch (error) {
+    console.error('Chunked storage test failed:', error);
+    throw error;
+  }
+}
