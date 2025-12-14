@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CardData } from '../lib/fsrs';
 import { telegram } from '../lib/telegram';
+import { Trash2, Zap, BarChart, Info } from 'react-feather';
 
 interface CardEditViewProps {
   card: CardData;
@@ -25,6 +26,13 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
       return;
     }
     
+    // Check if both question and answer are empty - delete card
+    if (!question.trim() && !answer.trim()) {
+      console.log('CardEditView: Both fields empty, deleting card...');
+      onDelete();
+      return;
+    }
+    
     // Validate input - only question is required
     if (!question.trim()) {
       setError('Вопрос не может быть пустым');
@@ -39,7 +47,7 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
       setError('Ошибка сохранения карточки');
       console.error('CardEditView: Save error:', e);
     }
-  }, [hasChanges, error, question, answer, onSave]);
+  }, [hasChanges, error, question, answer, onSave, onDelete]);
 
   const handleCancel = useCallback(() => {
     if (hasChanges) {
@@ -163,26 +171,25 @@ export const CardEditView: React.FC<CardEditViewProps> = ({ card, onSave, onCanc
         </div>
       </div>
 
-      {/* Actions */}
-      <div style={styles.actionsContainer}>
-        <button
-          style={styles.deleteButton}
-          onClick={onDelete}
-        >
-          🗑️ Удалить карточку
-        </button>
-      </div>
+
 
       {/* Hints */}
       <div style={styles.hintsContainer}>
         <p style={styles.hint}>
-          💡 Поддерживаются многострочные записи
+          <Zap size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          Поддерживаются многострочные записи
         </p>
         <p style={styles.hint}>
-          📊 Прогресс изучения сохранится после редактирования
+          <BarChart size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          Прогресс изучения сохранится после редактирования
         </p>
         <p style={styles.hint}>
-          ℹ️ Ответ может быть пустым (фронтальная карта)
+          <Info size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          Ответ может быть пустым (фронтальная карта)
+        </p>
+        <p style={styles.hint}>
+          <Trash2 size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          Для удаления карточки очистите оба поля и сохраните
         </p>
         {telegram.isAvailable() && (
           <p style={styles.hint}>
@@ -287,26 +294,5 @@ const styles = {
     lineHeight: '1.3',
   },
   
-  actionsContainer: {
-    padding: '16px',
-    borderTop: '1px solid var(--tg-theme-hint-color, #c8c7cc)',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  
-  deleteButton: {
-    padding: '10px 20px',
-    backgroundColor: '#ff4757',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    outline: 'none',
-    transition: 'opacity 0.2s ease',
-  },
+
 };

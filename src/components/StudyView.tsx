@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FSRSManager, CardData } from '../lib/fsrs';
 import type { Rating } from 'ts-fsrs';
 import { telegram } from '../lib/telegram';
+import { List, Plus, Award } from 'react-feather';
 
 interface StudyViewProps {
   fsrs: FSRSManager;
@@ -9,10 +10,9 @@ interface StudyViewProps {
   onEditTSV: () => void;
   onCreateCard: () => void;
   onSaveProgress: () => Promise<void>;
-  onSettings: () => void;
 }
 
-export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onCreateCard, onSaveProgress, onSettings }) => {
+export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTSV, onCreateCard, onSaveProgress }) => {
   const [currentCard, setCurrentCard] = useState<CardData | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [stats, setStats] = useState(fsrs.getStats());
@@ -32,9 +32,6 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
     setStats(fsrs.getStats());
   };
 
-
-
-
   const handleCardClick = () => {
     if (!showAnswer) {
       setShowAnswer(true);
@@ -45,24 +42,24 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
     if (!currentCard || !showAnswer) return;
 
     fsrs.reviewCard(currentCard, grade);
-    
+
     // Save progress to storage
     try {
       await onSaveProgress();
     } catch (error) {
       console.error('Failed to save progress:', error);
     }
-    
+
     loadNextCard();
     updateStats();
-    
+
     // Haptic feedback
     telegram.hapticFeedback('impact');
   };
 
   const getSchedulingInfo = () => {
     if (!currentCard) return null;
-    
+
     try {
       const schedulingInfo = fsrs.getSchedulingInfo(currentCard);
       return schedulingInfo;
@@ -77,7 +74,7 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
     const diffMinutes = diffMs / (1000 * 60);
     const diffHours = diffMinutes / 60;
     const diffDays = diffHours / 24;
-    
+
     if (diffMinutes < 1) {
       return '1 мин';
     } else if (diffMinutes < 60) {
@@ -97,32 +94,32 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
 
   const getGradeText = (grade: Rating): string => {
     const schedulingInfo = getSchedulingInfo();
-    
+
     if (!schedulingInfo) return '?';
-    
+
     switch (grade) {
-      case 1: 
+      case 1:
         if (schedulingInfo?.again) {
           return formatInterval(schedulingInfo.again.card.due);
         }
         break;
-      case 2: 
+      case 2:
         if (schedulingInfo?.hard) {
           return formatInterval(schedulingInfo.hard.card.due);
         }
         break;
-      case 3: 
+      case 3:
         if (schedulingInfo?.good) {
           return formatInterval(schedulingInfo.good.card.due);
         }
         break;
-      case 4: 
+      case 4:
         if (schedulingInfo?.easy) {
           return formatInterval(schedulingInfo.easy.card.due);
         }
         break;
     }
-    
+
     return '?';
   };
 
@@ -176,35 +173,28 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
           </div>
           <div style={styles.buttonGroup}>
             <button
+              style={styles.listButton}
+              onClick={onEditTSV}
+              title="Массовое редактирование"
+            >
+              <List size={16} />
+            </button>
+            <button
               style={styles.createButton}
               onClick={onCreateCard}
               title="Создать новую карточку"
             >
               +
-            </button>
-            <button
-              style={styles.tableButton}
-              onClick={onEditTSV}
-              title="Массовое редактирование"
-            >
-              <div style={styles.tableIcon}>
-                <div style={styles.tableIconRow}></div>
-                <div style={styles.tableIconRow}></div>
-                <div style={styles.tableIconRow}></div>
-              </div>
-            </button>
-            <button
-              style={styles.settingsButton}
-              onClick={onSettings}
-              title="Настройки"
-            >
-              ⚙️
+              <Plus size={16} />
             </button>
           </div>
         </div>
 
         <div style={styles.completedState}>
-          <h2 style={styles.completedTitle}>🎉 Все готово!</h2>
+          <h2 style={styles.completedTitle}>
+            <Award size={24} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+            Все готово!
+          </h2>
           <p style={styles.completedText}>
             Вы повторили все карточки на сегодня. Отличная работа!
           </p>
@@ -237,32 +227,21 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
             onClick={onCreateCard}
             title="Создать новую карточку"
           >
-            +
+            <Plus size={16} />
           </button>
           <button
-            style={styles.tableButton}
+            style={styles.listButton}
             onClick={onEditTSV}
             title="Массовое редактирование"
           >
-            <div style={styles.tableIcon}>
-              <div style={styles.tableIconRow}></div>
-              <div style={styles.tableIconRow}></div>
-              <div style={styles.tableIconRow}></div>
-            </div>
-          </button>
-          <button
-            style={styles.settingsButton}
-            onClick={onSettings}
-            title="Настройки"
-          >
-            ⚙️
+            <List size={16} />
           </button>
         </div>
       </div>
 
       {/* Card */}
       <div style={styles.cardContainer}>
-        <div 
+        <div
           style={{
             ...styles.card,
             cursor: showAnswer ? 'default' : 'pointer'
@@ -273,7 +252,7 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
             <div style={styles.questionContainer}>
               <h2 style={styles.question}>{currentCard.question}</h2>
             </div>
-            
+
             {showAnswer && (
               <div style={styles.answerContainer}>
                 <div style={styles.divider} />
@@ -335,7 +314,7 @@ const styles = {
     padding: '0',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
-  
+
   statsHeader: {
     padding: '16px',
     backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
@@ -344,32 +323,32 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  
+
   statsContainer: {
     display: 'flex',
     justifyContent: 'space-around',
     gap: '16px',
   },
-  
+
   statItem: {
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
     gap: '4px',
   },
-  
+
   statValue: {
     fontSize: '24px',
     fontWeight: 'bold',
     color: 'var(--tg-theme-button-color, #2481cc)',
   },
-  
+
   statLabel: {
     fontSize: '12px',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     textTransform: 'uppercase' as const,
   },
-  
+
   cardContainer: {
     flex: 1,
     display: 'flex',
@@ -377,7 +356,7 @@ const styles = {
     justifyContent: 'center',
     padding: '16px',
   },
-  
+
   card: {
     width: '100%',
     maxWidth: '400px',
@@ -388,15 +367,15 @@ const styles = {
     overflow: 'hidden',
     transition: 'transform 0.2s ease',
   },
-  
+
   cardContent: {
     padding: '24px',
   },
-  
+
   questionContainer: {
     textAlign: 'center' as const,
   },
-  
+
   question: {
     fontSize: '20px',
     fontWeight: '600',
@@ -405,17 +384,17 @@ const styles = {
     lineHeight: '1.4',
     whiteSpace: 'pre-line' as const,
   },
-  
+
   divider: {
     height: '1px',
     backgroundColor: 'var(--tg-theme-hint-color, #c8c7cc)',
     margin: '20px 0',
   },
-  
+
   answerContainer: {
     textAlign: 'center' as const,
   },
-  
+
   answer: {
     fontSize: '18px',
     margin: '0',
@@ -423,31 +402,29 @@ const styles = {
     lineHeight: '1.4',
     whiteSpace: 'pre-line' as const,
   },
-  
+
   tapHint: {
     padding: '16px 24px',
     backgroundColor: 'var(--tg-theme-secondary-bg-color, #f1f1f1)',
     textAlign: 'center' as const,
   },
-  
+
   tapHintText: {
     fontSize: '14px',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
   },
-  
+
   gradeContainer: {
     padding: '16px',
     backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
   },
-  
 
-  
   gradeButtons: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr 1fr 1fr',
     gap: '8px',
   },
-  
+
   gradeButton: {
     padding: '8px 4px',
     border: 'none',
@@ -466,7 +443,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   emptyState: {
     flex: 1,
     display: 'flex',
@@ -476,21 +453,21 @@ const styles = {
     padding: '32px 16px',
     textAlign: 'center' as const,
   },
-  
+
   emptyTitle: {
     fontSize: '24px',
     fontWeight: '600',
     margin: '0 0 16px 0',
     color: 'var(--tg-theme-text-color, #000000)',
   },
-  
+
   emptyText: {
     fontSize: '16px',
     margin: '0 0 32px 0',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     lineHeight: '1.4',
   },
-  
+
   completedState: {
     display: 'flex',
     flexDirection: 'column' as const,
@@ -500,27 +477,27 @@ const styles = {
     textAlign: 'center' as const,
     minHeight: '300px',
   },
-  
+
   completedTitle: {
     fontSize: '24px',
     fontWeight: '600',
     margin: '0 0 16px 0',
     color: 'var(--tg-theme-text-color, #000000)',
   },
-  
+
   completedText: {
     fontSize: '16px',
     margin: '0 0 32px 0',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     lineHeight: '1.4',
   },
-  
+
   editContainer: {
     padding: '16px',
     textAlign: 'center' as const,
     backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
   },
-  
+
   editButton: {
     padding: '8px 16px',
     backgroundColor: 'transparent',
@@ -533,12 +510,12 @@ const styles = {
     textDecoration: 'underline',
     outline: 'none',
   },
-  
+
   buttonGroup: {
     display: 'flex',
     gap: '8px',
   },
-  
+
   createButton: {
     width: '32px',
     height: '32px',
@@ -546,8 +523,6 @@ const styles = {
     color: 'var(--tg-theme-button-text-color, #ffffff)',
     border: 'none',
     borderRadius: '6px',
-    fontSize: '18px',
-    fontWeight: '500',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -555,47 +530,14 @@ const styles = {
     outline: 'none',
     transition: 'opacity 0.2s ease',
   },
-  
-  tableButton: {
-    width: '32px',
-    height: '32px',
-    backgroundColor: 'transparent',
-    color: 'var(--tg-theme-hint-color, #8e8e93)',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '16px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    outline: 'none',
-    transition: 'background-color 0.2s ease, color 0.2s ease',
-  },
-  
-  tableIcon: {
-    width: '16px',
-    height: '12px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '2px',
-  },
-  
-  tableIconRow: {
-    width: '100%',
-    height: '2px',
-    backgroundColor: 'currentColor',
-    borderRadius: '1px',
-  },
 
-  settingsButton: {
+  listButton: {
     width: '32px',
     height: '32px',
     backgroundColor: 'transparent',
     color: 'var(--tg-theme-hint-color, #8e8e93)',
     border: 'none',
     borderRadius: '6px',
-    fontSize: '16px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',

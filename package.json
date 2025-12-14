@@ -9,10 +9,10 @@
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist"
   },
-
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-feather": "^2.0.10",
     "ts-fsrs": "^3.5.0"
   },
   "devDependencies": {

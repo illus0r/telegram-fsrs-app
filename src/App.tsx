@@ -149,6 +149,19 @@ export const App: React.FC = () => {
     setCurrentView('study');
   };
 
+  // Setup settings button in Telegram menu
+  useEffect(() => {
+    if (currentView === 'study') {
+      telegram.showSettingsButton(handleSettings);
+    } else {
+      telegram.hideSettingsButton();
+    }
+
+    return () => {
+      telegram.hideSettingsButton();
+    };
+  }, [currentView]);
+
   const handleCardDelete = async () => {
     if (!currentEditCard) return;
     
@@ -214,7 +227,6 @@ export const App: React.FC = () => {
           onEditTSV={handleEdit}
           onCreateCard={handleCreateCard}
           onSaveProgress={handleSaveProgress}
-          onSettings={handleSettings}
         />
       ) : currentView === 'edit' ? (
         <EditView

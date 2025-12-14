@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { logger } from '../lib/logger';
 import { getLocalStorageInfo, clearLocalStorage, tryReadFromCloud, tryWriteToCloud, downloadAndShowCloudData, migrateOldDataToNewFormat } from '../lib/storage';
 import { syncStatus, SyncStatus } from '../lib/syncStatus';
+import { Trash2, RefreshCw, Download, Upload, Search, CheckCircle, XCircle, AlertTriangle, Clock } from 'react-feather';
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -100,7 +101,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       setCloudData(report);
     } catch (error) {
       console.error('Failed to inspect cloud data:', error);
-      setCloudData(`❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setCloudData(`Ошибка загрузки: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoadingCloud(false);
     }
@@ -113,13 +114,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const success = await migrateOldDataToNewFormat();
         if (success) {
           refreshData();
-          alert('✅ Миграция завершена успешно!');
+          alert('Миграция завершена успешно!');
         } else {
-          alert('ℹ️ Миграция не требуется или не удалась');
+          alert('Миграция не требуется или не удалась');
         }
       } catch (error) {
         console.error('Migration failed:', error);
-        alert('❌ Ошибка миграции: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        alert('Ошибка миграции: ' + (error instanceof Error ? error.message : 'Unknown error'));
       } finally {
         setIsTesting(false);
       }
@@ -133,10 +134,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         syncStatus.setLocalRevision(1);
         syncStatus.setServerRevision(0);
         refreshData();
-        alert('✅ Ревизии сброшены! Локальная = 1, серверная = 0');
+        alert('Ревизии сброшены! Локальная = 1, серверная = 0');
       } catch (error) {
         console.error('Failed to reset revisions:', error);
-        alert('❌ Ошибка сброса ревизий');
+        alert('Ошибка сброса ревизий');
       }
     }
   };
@@ -162,7 +163,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             <div style={styles.infoRow}>
               <span style={styles.infoLabel}>Локальные данные:</span>
               <span style={styles.infoValue}>
-                {storageInfo.hasData ? `✅ ${storageInfo.size} символов` : '❌ Отсутствуют'}
+                {storageInfo.hasData ? (
+                  <>
+                    <CheckCircle size={12} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#28a745' }} />
+                    {storageInfo.size} символов
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={12} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#dc3545' }} />
+                    Отсутствуют
+                  </>
+                )}
               </span>
             </div>
             <div style={styles.infoRow}>
@@ -180,9 +191,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             <div style={styles.infoRow}>
               <span style={styles.infoLabel}>Статус синхронизации:</span>
               <span style={styles.infoValue}>
-                {syncStatusData.isSyncing ? '🔄 Синхронизация...' :
-                 syncStatusData.hasUnsavedChanges ? '⚠️ Есть изменения' :
-                 '✅ Синхронизировано'}
+                {syncStatusData.isSyncing ? (
+                  <>
+                    <RefreshCw size={12} style={{ marginRight: '4px', verticalAlign: 'middle', animation: 'spin 1s linear infinite' }} />
+                    Синхронизация...
+                  </>
+                ) : syncStatusData.hasUnsavedChanges ? (
+                  <>
+                    <AlertTriangle size={12} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#ffc107' }} />
+                    Есть изменения
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={12} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#28a745' }} />
+                    Синхронизировано
+                  </>
+                )}
               </span>
             </div>
             {syncStatusData.lastSyncError && (
@@ -205,7 +229,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               onClick={refreshData}
               style={styles.actionButton}
             >
-              🔄 Обновить информацию
+              <RefreshCw size={16} style={{ marginRight: '6px' }} />
+              Обновить информацию
             </button>
             
             <button
@@ -213,7 +238,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               style={styles.actionButton}
               disabled={isRefreshing}
             >
-              {isRefreshing ? '⏳ Загрузка...' : '⬇️ Загрузить из облака'}
+              {isRefreshing ? (
+                <>
+                  <Clock size={16} style={{ marginRight: '6px' }} />
+                  Загрузка...
+                </>
+              ) : (
+                <>
+                  <Download size={16} style={{ marginRight: '6px' }} />
+                  Загрузить из облака
+                </>
+              )}
             </button>
             
             <button
@@ -221,7 +256,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               style={styles.actionButton}
               disabled={isTesting}
             >
-              {isTesting ? '⏳ Запись...' : '⬆️ Записать в облако'}
+              {isTesting ? (
+                <>
+                  <Clock size={16} style={{ marginRight: '6px' }} />
+                  Запись...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} style={{ marginRight: '6px' }} />
+                  Записать в облако
+                </>
+              )}
             </button>
             
             <button
@@ -229,7 +274,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               style={styles.actionButton}
               disabled={isLoadingCloud}
             >
-              {isLoadingCloud ? '⏳ Загружаем...' : '🔍 Показать данные из облака'}
+              {isLoadingCloud ? (
+                <>
+                  <Clock size={16} style={{ marginRight: '6px' }} />
+                  Загружаем...
+                </>
+              ) : (
+                <>
+                  <Search size={16} style={{ marginRight: '6px' }} />
+                  Показать данные из облака
+                </>
+              )}
             </button>
             
             <button
@@ -237,7 +292,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               style={{...styles.actionButton, backgroundColor: '#ff9500'}}
               disabled={isTesting}
             >
-              {isTesting ? '⏳ Миграция...' : '🔄 Мигрировать старые данные'}
+              {isTesting ? (
+                <>
+                  <Clock size={16} style={{ marginRight: '6px' }} />
+                  Миграция...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} style={{ marginRight: '6px' }} />
+                  Мигрировать старые данные
+                </>
+              )}
             </button>
 
             <button
@@ -251,7 +316,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
               onClick={handleClearLocalStorage}
               style={{...styles.actionButton, backgroundColor: '#ff6b6b'}}
             >
-              🗑️ Очистить локальные данные
+              <Trash2 size={16} style={{ marginRight: '6px' }} />
+              Очистить локальные данные
             </button>
           </div>
         </div>
@@ -267,13 +333,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                   style={styles.smallButton}
                   disabled={isLoadingCloud}
                 >
-                  🔄 Обновить
+                  <RefreshCw size={16} style={{ marginRight: '6px' }} />
+                  Обновить
                 </button>
                 <button
                   onClick={() => setCloudData('')}
                   style={{...styles.smallButton, backgroundColor: '#ff6b6b'}}
                 >
-                  🗑️ Скрыть
+                  <Trash2 size={16} style={{ marginRight: '6px' }} />
+                  Скрыть
                 </button>
               </div>
             </div>
@@ -296,13 +364,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 onClick={refreshData}
                 style={styles.smallButton}
               >
-                🔄 Обновить
+                <RefreshCw size={16} style={{ marginRight: '6px' }} />
+                Обновить
               </button>
               <button
                 onClick={handleClearLogs}
                 style={{...styles.smallButton, backgroundColor: '#ff6b6b'}}
               >
-                🗑️ Очистить
+                <Trash2 size={16} style={{ marginRight: '6px' }} />
+                Очистить
               </button>
             </div>
           </div>
@@ -460,3 +530,13 @@ const styles = {
     outline: 'none',
   },
 };
+
+// Add CSS for spinner animation
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);
