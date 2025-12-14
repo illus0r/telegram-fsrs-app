@@ -223,18 +223,18 @@ export const StudyView: React.FC<StudyViewProps> = ({ fsrs, onEditCard, onEditTS
         </div>
         <div style={styles.buttonGroup}>
           <button
-            style={styles.createButton}
-            onClick={onCreateCard}
-            title="Создать новую карточку"
-          >
-            <Plus size={16} />
-          </button>
-          <button
             style={styles.listButton}
             onClick={onEditTSV}
             title="Массовое редактирование"
           >
             <List size={16} />
+          </button>
+          <button
+            style={styles.createButton}
+            onClick={onCreateCard}
+            title="Создать новую карточку"
+          >
+            <Plus size={16} />
           </button>
         </div>
       </div>
