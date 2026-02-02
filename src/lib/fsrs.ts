@@ -64,8 +64,8 @@ export class FSRSManager {
       const lastReview = columns[10] ? new Date(columns[10]) : undefined;
 
       let card: Card;
-      if (stability === 0 && difficulty === 0 && reps === 0) {
-        // New card
+      if (stability === 0 && difficulty === 0) {
+        // New card or card with invalid FSRS data (stability=0 causes NaN in calculations)
         card = createEmptyCard();
       } else {
         // Existing card with FSRS data

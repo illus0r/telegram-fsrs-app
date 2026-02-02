@@ -164,6 +164,7 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
       const lines = processedData.trim().split('\n');
       let hasError = false;
       let errorMessage = '';
+      const warnings: string[] = [];
 
       for (let i = 1; i < lines.length; i++) { // Skip header line
         const line = lines[i].trim();
@@ -178,20 +179,36 @@ export const EditView: React.FC<EditViewProps> = ({ fsrs, onSave, onCancel }) =>
 
         // Validate that question is not empty after unescaping
         const question = (columns[0] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').trim();
-        
+
         if (!question) {
           hasError = true;
           errorMessage = `Строка ${i + 1}: вопрос не может быть пустым`;
           break;
+        }
+
+        // Check for invalid FSRS data (has reps but no stability/difficulty)
+        if (columns.length >= 8) {
+          const stability = parseFloat(columns[3]);
+          const difficulty = parseFloat(columns[4]);
+          const reps = parseInt(columns[7]);
+
+          if (reps > 0 && (isNaN(stability) || stability === 0) && (isNaN(difficulty) || difficulty === 0)) {
+            warnings.push(`Строка ${i + 1}: прогресс будет сброшен (пустые stability/difficulty)`);
+          }
         }
       }
 
       if (hasError) {
         setError(errorMessage);
         telegram.disableMainButton();
+      } else if (warnings.length > 0) {
+        setError(`Предупреждение: ${warnings[0]}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}`);
+        if (hasChanges) {
+          telegram.enableMainButton(); // Allow save with warnings
+        }
       } else {
         setError(null);
-        if (hasChanges && !hasError) {
+        if (hasChanges) {
           telegram.enableMainButton();
         }
       }
